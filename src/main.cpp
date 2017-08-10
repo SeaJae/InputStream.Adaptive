@@ -158,7 +158,6 @@ public:
   {
   }
 
-
 private:
   std::string m_strProfilePath, m_strLibraryPath;
 }kodihost;
@@ -202,10 +201,6 @@ public:
     /* unimplemented */
     return AP4_ERROR_NOT_SUPPORTED;
   };
-  const AP4_UI08 *GetBuffer(AP4_Size bytes_to_read) override
-  {
-    return stream_->getBuffer(bytes_to_read);
-  }
   // AP4_Referenceable methods
   void AddReference() override {};
   void Release()override      {};
@@ -264,9 +259,9 @@ bool KodiAdaptiveStream::download(const char* url, const std::map<std::string, s
   xbmc->CURLOpen(file, XFILE::READ_CHUNKED | XFILE::READ_NO_CACHE);
 
   // read the file
-  char *buf = (char*)malloc(1024*1024);
+  char *buf = (char*)malloc(32*1024);
   size_t nbRead, nbReadOverall = 0;
-  while ((nbRead = xbmc->ReadFile(file, buf, 1024 * 1024)) > 0 && ~nbRead && write_data(buf, nbRead)) nbReadOverall+= nbRead;
+  while ((nbRead = xbmc->ReadFile(file, buf, 32 * 1024)) > 0 && ~nbRead && write_data(buf, nbRead)) nbReadOverall+= nbRead;
   free(buf);
 
   if (!nbReadOverall)
