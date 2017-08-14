@@ -380,6 +380,7 @@ bool KodiAdaptiveStream::parseIndexRange()
     byteStream.Tell(pos);
     seg.range_end_ = pos + getRepresentation()->indexRangeMin_ + sidx->GetFirstOffset() - 1;
     rep->timescale_ = sidx->GetTimeScale();
+    rep->SetScaling();
 
     for (unsigned int i(0); i < refs.ItemCount(); ++i)
     {
@@ -764,7 +765,8 @@ public:
     , m_started(false)
     , m_dts(0)
     , m_pts(0)
-    , m_ptsOffset(0)
+    , m_ptsDiff(DVD_NOPTS_VALUE)
+    , m_ptsOffs(~0ULL)
     , m_codecHandler(0)
     , m_defaultKey(0)
     , m_protectedDesc(0)
@@ -881,12 +883,18 @@ public:
         m_singleSampleDecryptor->DecryptSampleData(m_poolId, m_encrypted, m_sampleData, nullptr, 0, nullptr, nullptr);
       }
 
-      if (m_codecHandler->Transform(m_sampleData, m_track->GetMediaTimeScale(), m_ptsOffset))
+      if (m_codecHandler->Transform(m_sampleData, m_track->GetMediaTimeScale(), (m_ptsOffs * m_timeBaseInt) / m_timeBaseExt))
         m_codecHandler->ReadNextSample(m_sample, m_sampleData);
     }
 
     m_dts = (m_sample.GetDts() * m_timeBaseExt) / m_timeBaseInt;
     m_pts = (m_sample.GetCts() * m_timeBaseExt) / m_timeBaseInt;
+
+    if (~m_ptsOffs)
+    {
+      m_ptsDiff = m_pts - m_ptsOffs;
+      m_ptsOffs = ~0ULL;
+    }
 
     m_codecHandler->UpdatePPSId(m_sampleData);
 
@@ -902,7 +910,13 @@ public:
   virtual bool EOS() const  override { return m_eos; };
   virtual uint64_t DTS()const override { return m_dts; };
   virtual uint64_t  PTS()const override { return m_pts; };
-  virtual uint64_t  Elapsed(uint64_t basePTS) { return m_pts > basePTS ? m_pts - basePTS : 0; };
+
+  virtual uint64_t  Elapsed(uint64_t basePTS)
+  {
+    int64_t manifestPTS = m_pts - m_ptsDiff;
+    return manifestPTS > basePTS ? manifestPTS - basePTS : 0;
+  };
+
   virtual AP4_UI32 GetStreamId()const override { return m_streamId; };
   virtual AP4_Size GetSampleDataSize()const override { return m_sampleData.GetDataSize(); };
   virtual const AP4_Byte *GetSampleData()const override { return m_sampleData.GetData(); };
@@ -935,7 +949,7 @@ public:
   virtual bool TimeSeek(uint64_t  pts, bool preceeding) override
   {
     AP4_Ordinal sampleIndex;
-    AP4_UI64 seekPos(static_cast<AP4_UI64>((pts*m_timeBaseInt) / m_timeBaseExt));
+    AP4_UI64 seekPos(static_cast<AP4_UI64>(((pts + m_ptsDiff) * m_timeBaseInt) / m_timeBaseExt));
     if (AP4_SUCCEEDED(SeekSample(m_track->GetId(), seekPos, sampleIndex, preceeding)))
     {
       if (m_decrypter)
@@ -950,7 +964,8 @@ public:
 
   virtual void SetPTSOffset(uint64_t offset) override
   {
-    FindTracker(m_track->GetId())->m_NextDts = m_ptsOffset = offset;
+    FindTracker(m_track->GetId())->m_NextDts = (offset * m_timeBaseInt) / m_timeBaseExt;
+    m_ptsOffs = offset;
   };
 
   virtual bool GetNextFragmentInfo(uint64_t &ts, uint64_t &dur) override
@@ -1091,8 +1106,8 @@ private:
   AP4_UI32 m_poolId;
 
   bool m_eos, m_started;
-  int64_t m_dts, m_pts;
-  AP4_UI64 m_ptsOffset;
+  int64_t m_dts, m_pts, m_ptsDiff;
+  AP4_UI64 m_ptsOffs;
 
   uint64_t m_timeBaseExt, m_timeBaseInt;
 
@@ -1225,7 +1240,7 @@ public:
   virtual uint64_t  Elapsed(uint64_t basePTS)
   {
     // TSReader::GetPTSDiff() is the difference between playlist PTS and real PTS relative to current segment
-    int64_t playlistPTS = m_pts - (TSReader::GetPTSDiff() * 100LL / 9);
+    int64_t playlistPTS = m_pts - m_ptsDiff;
     return playlistPTS > basePTS ? playlistPTS - basePTS : 0;
   };
 
@@ -1251,6 +1266,12 @@ public:
     {
       m_dts = (GetDts() == PTS_UNSET) ? DVD_NOPTS_VALUE : (GetDts() * 100) / 9;
       m_pts = (GetPts() == PTS_UNSET) ? DVD_NOPTS_VALUE : (GetPts() * 100) / 9;
+
+      if (~m_ptsOffs)
+      {
+        m_ptsDiff = m_pts - m_ptsOffs;
+        m_ptsOffs = ~0ULL;
+      }
       return AP4_SUCCESS;
     }
     m_eos = true;
@@ -1270,7 +1291,7 @@ public:
 
   virtual bool TimeSeek(uint64_t pts, bool preceeding) override
   {
-    AP4_UI64 seekPos(static_cast<AP4_UI64>((pts*9) / 100) + TSReader::GetPTSDiff());
+    AP4_UI64 seekPos(((pts + m_ptsDiff ) * 9) / 100);
     if (TSReader::SeekTime(seekPos, preceeding))
     {
       m_started = true;
@@ -1281,7 +1302,7 @@ public:
 
   virtual void SetPTSOffset(uint64_t offset) override
   {
-    TSReader::SetPTSOffset((offset * 9) / 100);
+    m_ptsOffs = offset;
   }
 
   virtual bool GetNextFragmentInfo(uint64_t &ts, uint64_t &dur) override { return false; }
@@ -1300,6 +1321,8 @@ private:
 
   uint64_t m_pts = 0;
   uint64_t m_dts = 0;
+  int64_t m_ptsDiff = DVD_NOPTS_VALUE;
+  uint64_t m_ptsOffs = ~0ULL;
 };
 
 /*******************************************************
