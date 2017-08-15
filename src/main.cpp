@@ -1428,6 +1428,8 @@ Session::Session(MANIFEST_TYPE manifestType, const char *strURL, const char *str
 
 Session::~Session()
 {
+  kodi::Log(ADDON_LOG_DEBUG, "Session::~Session()");
+  adaptiveTree_->close();
   for (std::vector<STREAM*>::iterator b(streams_.begin()), e(streams_.end()); b != e; ++b)
     SAFE_DELETE(*b);
   streams_.clear();
@@ -1969,6 +1971,12 @@ bool Session::SeekTime(double seekTime, unsigned int streamId, bool preceeding)
   if (seekTime < 0)
     seekTime = 0;
 
+  if (adaptiveTree_->has_timeshift_buffer_ && seekTime > (static_cast<double>(GetTotalTimeMs()) / 1000) - 12)
+  {
+    seekTime = (static_cast<double>(GetTotalTimeMs()) / 1000) - 12;
+    preceeding = true;
+  }
+
   for (std::vector<STREAM*>::const_iterator b(streams_.begin()), e(streams_.end()); b != e; ++b)
     if ((*b)->enabled && (*b)->reader_ && (streamId == 0 || (*b)->info_.m_pID == streamId))
     {
@@ -2303,7 +2311,7 @@ extern "C" {
     xbmc->Log(ADDON::LOG_DEBUG, "GetCapabilities()");
     INPUTSTREAM_CAPABILITIES caps;
     caps.m_supportsIDemux = true;
-    caps.m_supportsIPosTime = false;
+    caps.m_supportsIPosTime = true;
     caps.m_supportsIDisplayTime = true;
     caps.m_supportsSeek = true;// m_session && !m_session->IsLive();
     caps.m_supportsPause = true;// caps.m_supportsSeek;
@@ -2552,14 +2560,10 @@ extern "C" {
     return NULL;
   }
 
+  // Accurate search (PTS based)
   bool DemuxSeekTime(double time, bool backwards, double *startpts)
   {
-    if (!m_session)
-      return false;
-
-    xbmc->Log(ADDON::LOG_INFO, "DemuxSeekTime (%0.4lf)", time);
-
-    return m_session->SeekTime(time * 0.001f, 0, !backwards);
+    return true;
   }
 
   void DemuxSetSpeed(int speed)
@@ -2594,6 +2598,16 @@ extern "C" {
       return 0;
 
     return static_cast<int>(m_session->GetElapsedTimeMs());
+  }
+
+  bool PosTime(int ms)
+  {
+    if (!m_session)
+      return false;
+
+    xbmc->Log(ADDON::LOG_INFO, "PosTime (%d)", ms);
+
+    return m_session->SeekTime(static_cast<double>(ms) * 0.001f, 0, false);
   }
 
   bool CanPauseStream(void)
