@@ -2527,6 +2527,13 @@ extern "C" {
   {
   }
 
+  bool IsRealTimeStream()
+  {
+    return m_session && m_session->IsLive();
+  }
+
+/*****************************************************************************************************/
+
   DemuxPacket* __cdecl DemuxRead(void)
   {
     if (!m_session)
