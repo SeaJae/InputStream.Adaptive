@@ -1430,7 +1430,6 @@ Session::Session(MANIFEST_TYPE manifestType, const char *strURL, const char *str
 Session::~Session()
 {
   kodi::Log(ADDON_LOG_DEBUG, "Session::~Session()");
-  adaptiveTree_->close();
   for (std::vector<STREAM*>::iterator b(streams_.begin()), e(streams_.end()); b != e; ++b)
     SAFE_DELETE(*b);
   streams_.clear();
