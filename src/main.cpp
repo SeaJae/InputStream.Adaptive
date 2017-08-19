@@ -913,7 +913,7 @@ public:
 
   virtual uint64_t  Elapsed(uint64_t basePTS)
   {
-    int64_t manifestPTS = m_pts - m_ptsDiff;
+    uint64_t manifestPTS = (m_pts > m_ptsDiff) ? m_pts - m_ptsDiff : 0;
     return manifestPTS > basePTS ? manifestPTS - basePTS : 0;
   };
 
@@ -1241,7 +1241,7 @@ public:
   virtual uint64_t  Elapsed(uint64_t basePTS)
   {
     // TSReader::GetPTSDiff() is the difference between playlist PTS and real PTS relative to current segment
-    int64_t playlistPTS = m_pts - m_ptsDiff;
+    uint64_t playlistPTS = (static_cast<int64_t>(m_pts) > m_ptsDiff) ? m_pts - m_ptsDiff : 0;
     return playlistPTS > basePTS ? playlistPTS - basePTS : 0;
   };
 
@@ -1800,7 +1800,6 @@ bool Session::initialize()
       }
 
       stream.stream_.prepare_stream(adp, GetVideoWidth(), GetVideoHeight(), hdcpLimit, hdcpVersion, min_bandwidth, max_bandwidth, repId, media_headers_);
-      stream.info_.m_flags = INPUTSTREAM_INFO::FLAG_NONE;
 
       switch (adp->type_)
       {
@@ -1809,8 +1808,6 @@ bool Session::initialize()
         break;
       case adaptive::AdaptiveTree::AUDIO:
         stream.info_.m_streamType = INPUTSTREAM_INFO::TYPE_AUDIO;
-        if (adp->impaired_)
-          stream.info_.m_flags |= INPUTSTREAM_INFO::FLAG_VISUAL_IMPAIRED;
         break;
       case adaptive::AdaptiveTree::SUBTITLE:
         stream.info_.m_streamType = INPUTSTREAM_INFO::TYPE_SUBTITLE;
@@ -2037,7 +2034,7 @@ void Session::CheckFragmentDuration(STREAM &stream)
   stream.segmentChanged = false;
 }
 
-const AP4_UI08 *Session::GetDefaultKeyId(const uint8_t index) const
+const AP4_UI08 *Session::GetDefaultKeyId(const uint16_t index) const
 {
   static const AP4_UI08 default_key[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
   if (adaptiveTree_->psshSets_[index].defaultKID_.size() == 16)
@@ -2335,7 +2332,7 @@ extern "C" {
 
     if (stream)
     {
-      uint8_t cdmId(stream->stream_.getRepresentation()->pssh_set_);
+      uint16_t cdmId(stream->stream_.getRepresentation()->pssh_set_);
 #ifdef ANDROID
       if (stream->encrypted)
       {
