@@ -1429,7 +1429,7 @@ Session::Session(MANIFEST_TYPE manifestType, const char *strURL, const char *str
 
 Session::~Session()
 {
-  kodi::Log(ADDON_LOG_DEBUG, "Session::~Session()");
+  xbmc->Log(ADDON::LOG_DEBUG, "Session::~Session()");
   for (std::vector<STREAM*>::iterator b(streams_.begin()), e(streams_.end()); b != e; ++b)
     SAFE_DELETE(*b);
   streams_.clear();
@@ -2527,11 +2527,6 @@ extern "C" {
   {
   }
 
-  bool IsRealTimeStream()
-  {
-    return m_session && m_session->IsLive();
-  }
-
 /*****************************************************************************************************/
 
   DemuxPacket* __cdecl DemuxRead(void)
@@ -2625,12 +2620,7 @@ extern "C" {
 
   bool CanSeekStream(void)
   {
-    return m_session && !m_session->IsLive();
-  }
-
-  bool PosTime(int)
-  {
-    return false;
+    return true;
   }
 
   void SetSpeed(int)
@@ -2641,9 +2631,9 @@ extern "C" {
   {
   }
 
-  bool IsRealTimeStream(void)
+  bool IsRealTimeStream()
   {
-    return false;
+    return m_session && m_session->IsLive();
   }
 
 }//extern "C"
