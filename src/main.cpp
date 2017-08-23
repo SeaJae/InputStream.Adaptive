@@ -2236,6 +2236,7 @@ extern "C" {
       else if (strcmp(props.m_ListItemProperties[i].m_strKey, "inputstream.adaptive.manifest_update_parameter") == 0)
       {
         mfup = props.m_ListItemProperties[i].m_strValue;
+        xbmc->Log(ADDON::LOG_DEBUG, "found inputstream.adaptive.manifest_update_parameter: %s", mfup);
       }
       else if (strcmp(props.m_ListItemProperties[i].m_strKey, "inputstream.adaptive.stream_headers") == 0)
       {
