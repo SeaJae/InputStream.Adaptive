@@ -2169,6 +2169,7 @@ extern "C" {
     xbmc->Log(ADDON::LOG_DEBUG, "ADDON_GetSettings()");
     return 0;
   }
+  mpd_url += mfup;
 
   ADDON_STATUS ADDON_SetSetting(const char *settingName, const void *settingValue)
   {
@@ -2196,7 +2197,7 @@ extern "C" {
   {
     xbmc->Log(ADDON::LOG_DEBUG, "Open()");
 
-    const char *lt(""), *lk(""), *ld(""), *lsc("");
+    const char *lt(""), *lk(""), *ld(""), *lsc(""), *mfup("");
     std::map<std::string, std::string> manh, medh;
     std::string mpd_url = props.m_strURL;
     MANIFEST_TYPE manifest(MANIFEST_TYPE_UNKNOWN);
@@ -2232,6 +2233,10 @@ extern "C" {
         else if (strcmp(props.m_ListItemProperties[i].m_strValue, "hls") == 0)
           manifest = MANIFEST_TYPE_HLS;
       }
+      else if (strcmp(props.m_ListItemProperties[i].m_strKey, "inputstream.adaptive.manifest_update_parameter") == 0)
+      {
+        mfup = props.m_ListItemProperties[i].m_strValue;
+      }
       else if (strcmp(props.m_ListItemProperties[i].m_strKey, "inputstream.adaptive.stream_headers") == 0)
       {
         xbmc->Log(ADDON::LOG_DEBUG, "found inputstream.adaptive.stream_headers: %s", props.m_ListItemProperties[i].m_strValue);
@@ -2257,7 +2262,9 @@ extern "C" {
 
     kodihost.SetProfilePath(props.m_profileFolder);
 
-    m_session = new Session(manifest, props.m_strURL, lt, lk, ld, lsc, manh, medh, props.m_profileFolder, m_width, m_height);
+    mpd_url += mfup;
+
+    m_session = new Session(manifest, mpd_url.c_str(), lt, lk, ld, lsc, manh, medh, props.m_profileFolder, m_width, m_height);
     m_session->SetVideoResolution(m_width, m_height);
 
     if (!m_session->initialize())
