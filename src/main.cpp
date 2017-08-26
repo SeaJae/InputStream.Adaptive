@@ -2033,7 +2033,9 @@ const AP4_UI08 *Session::GetDefaultKeyId(const uint16_t index) const
 std::uint16_t Session::GetVideoWidth() const
 {
   std::uint16_t ret(width_);
-  if (kodi::GetSettingBoolean("IGNOREDISPLAY"))
+  bool displayOverride;
+  xbmc->GetSetting("IGNOREDISPLAY", (char*)&displayOverride);
+  if (displayOverride)
     ret = 8192;
   else
     switch (secure_video_session_ ? max_secure_resolution_ : max_resolution_)
@@ -2056,7 +2058,9 @@ std::uint16_t Session::GetVideoWidth() const
 std::uint16_t Session::GetVideoHeight() const
 {
   std::uint16_t ret(height_);
-  if (kodi::GetSettingBoolean("IGNOREDISPLAY"))
+  bool displayOverride;
+  xbmc->GetSetting("IGNOREDISPLAY", (char*)&displayOverride);
+  if (displayOverride)
     ret = 8182;
   else
     switch (secure_video_session_ ? max_secure_resolution_ : max_resolution_)
@@ -2174,7 +2178,6 @@ extern "C" {
     xbmc->Log(ADDON::LOG_DEBUG, "ADDON_GetSettings()");
     return 0;
   }
-  mpd_url += mfup;
 
   ADDON_STATUS ADDON_SetSetting(const char *settingName, const void *settingValue)
   {
