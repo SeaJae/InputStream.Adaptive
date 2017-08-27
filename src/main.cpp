@@ -1464,7 +1464,11 @@ void Session::GetSupportedDecrypterURN(std::string &key_system)
   kodihost.SetLibraryPath(xbmc->TranslateSpecialProtocol(specialpath));
 
   std::vector<std::string> searchPaths(2);
+#ifdef ANDROID
+  searchPaths[0] = xbmc->TranslateSpecialProtocol("special://xbmcbinaddons/");
+#else
   searchPaths[0] = xbmc->TranslateSpecialProtocol("special://xbmcbinaddons/inputstream.adaptive/");
+#endif
   xbmc->GetSetting("__addonpath__", specialpath);
   searchPaths[1] = specialpath;
 
