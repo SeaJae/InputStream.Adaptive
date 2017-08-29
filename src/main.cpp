@@ -1346,10 +1346,11 @@ void Session::STREAM::disable()
   }
 }
 
-Session::Session(MANIFEST_TYPE manifestType, const char *strURL, const char *strLicType, const char* strLicKey, const char* strLicData, const char* strCert,
+Session::Session(MANIFEST_TYPE manifestType, const char *strURL, const char *strUpdateParam, const char *strLicType, const char* strLicKey, const char* strLicData, const char* strCert,
   const std::map<std::string, std::string> &manifestHeaders, const std::map<std::string, std::string> &mediaHeaders, const char* profile_path, uint16_t display_width, uint16_t display_height)
   : manifest_type_(manifestType)
   , mpdFileURL_(strURL)
+  , mpdUpdateParam_(strUpdateParam)
   , license_key_(strLicKey)
   , license_type_(strLicType)
   , license_data_(strLicData)
@@ -1552,7 +1553,7 @@ bool Session::initialize()
   }
 
   // Open mpd file
-  if (!adaptiveTree_->open(mpdFileURL_.c_str()) || adaptiveTree_->empty())
+  if (!adaptiveTree_->open(mpdFileURL_.c_str(), mpdUpdateParam_.c_str()) || adaptiveTree_->empty())
   {
     xbmc->Log(ADDON::LOG_ERROR, "Could not open / parse mpdURL (%s)", mpdFileURL_.c_str());
     return false;
@@ -2278,9 +2279,7 @@ extern "C" {
 
     kodihost.SetProfilePath(props.m_profileFolder);
 
-    mpd_url += mfup;
-
-    m_session = new Session(manifest, mpd_url.c_str(), lt, lk, ld, lsc, manh, medh, props.m_profileFolder, m_width, m_height);
+    m_session = new Session(manifest, mpd_url.c_str(), mfup, lt, lk, ld, lsc, manh, medh, props.m_profileFolder, m_width, m_height);
     m_session->SetVideoResolution(m_width, m_height);
 
     if (!m_session->initialize())
