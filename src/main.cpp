@@ -2045,21 +2045,20 @@ std::uint16_t Session::GetVideoWidth() const
   xbmc->GetSetting("IGNOREDISPLAY", (char*)&displayOverride);
   if (displayOverride)
     ret = 8192;
-  else
-    switch (secure_video_session_ ? max_secure_resolution_ : max_resolution_)
-    {
-    case 1:
-      if (ret > 640) ret = 640;
-      break;
-    case 2:
-      if (ret > 1280) ret = 1280;
-      break;
-    case 3:
-      if (ret > 1920) ret = 1920;
-      break;
-    default:
-      ;
-    }
+  switch (secure_video_session_ ? max_secure_resolution_ : max_resolution_)
+  {
+  case 1:
+    if (ret > 640) ret = 640;
+    break;
+  case 2:
+    if (ret > 1280) ret = 1280;
+    break;
+  case 3:
+    if (ret > 1920) ret = 1920;
+    break;
+  default:
+    ;
+  }
   return ret;
 }
 
@@ -2070,21 +2069,20 @@ std::uint16_t Session::GetVideoHeight() const
   xbmc->GetSetting("IGNOREDISPLAY", (char*)&displayOverride);
   if (displayOverride)
     ret = 8182;
-  else
-    switch (secure_video_session_ ? max_secure_resolution_ : max_resolution_)
-    {
-    case 1:
-      if (ret > 480) ret = 480;
-      break;
-    case 2:
-      if (ret > 720) ret = 720;
-      break;
-    case 3:
-      if (ret > 1080) ret = 1080;
-      break;
-    default:
-      ;
-    }
+  switch (secure_video_session_ ? max_secure_resolution_ : max_resolution_)
+  {
+  case 1:
+    if (ret > 480) ret = 480;
+    break;
+  case 2:
+    if (ret > 720) ret = 720;
+    break;
+  case 3:
+    if (ret > 1080) ret = 1080;
+    break;
+  default:
+    ;
+  }
   return ret;
 }
 
