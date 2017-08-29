@@ -1481,7 +1481,7 @@ void Session::GetSupportedDecrypterURN(std::string &key_system)
     xbmc->Log(ADDON::LOG_DEBUG, "Searching for decrypters in: %s", path->c_str());
 
     if (!xbmc->GetDirectory(path->c_str(), "", &items, &num_items))
-      return;
+      continue;
 
     for (unsigned int i(0); i < num_items; ++i)
     {
