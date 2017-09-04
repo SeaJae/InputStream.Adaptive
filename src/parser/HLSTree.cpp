@@ -249,6 +249,7 @@ bool HLSTree::open(const std::string &url, const std::string &manifestUpdatePara
     }
     // Set Live as default
     has_timeshift_buffer_ = true;
+    update_parameter_ = "full";
     return true;
   }
   return false;
@@ -381,7 +382,11 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
           }
         }
         else if (line.compare(0, 22, "#EXT-X-TARGETDURATION:") == 0)
-          m_segmentIntervalSec = atoi(line.c_str() + 22);
+        {
+          uint32_t newInterval = atoi(line.c_str() + 22) * 1000;
+          if (newInterval < updateInterval_)
+            updateInterval_ = newInterval;
+        }
         else if (line.compare(0, 11, "#EXT-X-KEY:") == 0)
         {
           if (!rep->pssh_set_)
@@ -433,6 +438,10 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
       rep->source_url_.clear(); // disable this segment
       return false;
     }
+
+    if (!update)
+      StartUpdateThread();
+
     return true;
   }
   return false;
@@ -479,29 +488,18 @@ void HLSTree::OnDataArrived(Representation *rep, const Segment *seg, const uint8
     AdaptiveTree::OnDataArrived(rep, seg, src, dst, dstOffset, dataSize);
 }
 
-void HLSTree::RefreshSegments(Representation *rep, const Segment *seg)
+void HLSTree::RefreshSegments()
 {
   if (m_refreshPlayList)
   {
-    int retryCount((m_segmentIntervalSec+3) &~3);
-
-    while (prepareRepresentation(rep, true) && retryCount > 0)
-    {
-      if (rep->segments_.pos(seg) + 1 == rep->segments_.data.size())
-      {
-        //Look if we have a new segment
-        if (rep->newStartNumber_ + rep->newSegments_.data.size() > rep->startNumber_ + rep->segments_.data.size())
-          break;
-        for (unsigned int i(0); i < 20; ++i)
-        {
-          std::this_thread::sleep_for(std::chrono::milliseconds(100));
-          if (!(rep->flags_ & Representation::ENABLED))
-            return;
-        }
-      }
-      else
-        break;
-      retryCount -= 2;
-    }
+    std::lock_guard<std::mutex> lck(treeMutex_);
+    for (std::vector<Period*>::const_iterator bp(periods_.begin()), ep(periods_.end()); bp != ep; ++bp)
+      for (std::vector<AdaptationSet*>::const_iterator ba((*bp)->adaptationSets_.begin()), ea((*bp)->adaptationSets_.end()); ba != ea; ++ba)
+        for (std::vector<Representation*>::iterator br((*ba)->repesentations_.begin()), er((*ba)->repesentations_.end()); br != er; ++br)
+          if ((*br)->flags_ & Representation::ENABLED)
+          {
+            prepareRepresentation((*br), true);
+            (*br)->flags_ &= ~Representation::WAITFORSEGMENT;
+          }
   }
 }

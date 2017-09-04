@@ -34,7 +34,7 @@ namespace adaptive
   {
   public:
     virtual void OnSegmentChanged(AdaptiveStream *stream) = 0;
-    virtual void OnStreamChange(AdaptiveStream *stream, uint32_t segment) = 0;
+    virtual void OnStreamChange(AdaptiveStream *stream) = 0;
   };
 
   class AdaptiveStream
@@ -68,9 +68,10 @@ namespace adaptive
     AdaptiveTree::Representation const *getRepresentation(){ return current_rep_; };
     double get_download_speed() const { return tree_.get_download_speed(); };
     void set_download_speed(double speed) { tree_.set_download_speed(speed); };
-    size_t getSegmentPos() { return current_rep_->segments_.pos(current_seg_); };
-    uint64_t GetPTSOffset() { return current_seg_ ? (current_seg_->startPTS_ * current_rep_->timescale_ext_) / current_rep_->timescale_int_ : 0; };
+    size_t getSegmentPos() { return current_rep_->getCurrentSegmentPos(); };
+    uint64_t GetPTSOffset() { return current_rep_->GetCurrentPTSOffset(); };
     uint64_t GetStartPTS() const { return start_PTS_; };
+    bool waitingForSegment() const;
   protected:
     virtual bool download(const char* url, const std::map<std::string, std::string> &mediaHeaders){ return false; };
     virtual bool parseIndexRange() { return false; };
@@ -80,6 +81,7 @@ namespace adaptive
     void ResetSegment();
     bool download_segment();
     void worker();
+    void swapNewSegments();
 
     struct THREADDATA
     {
@@ -113,8 +115,8 @@ namespace adaptive
     // Active configuration
     const AdaptiveTree::Period *current_period_;
     const AdaptiveTree::AdaptationSet *current_adp_;
-    const AdaptiveTree::Representation *current_rep_;
-    const AdaptiveTree::Segment *current_seg_, *loading_seg_;
+    AdaptiveTree::Representation *current_rep_;
+    const AdaptiveTree::Segment *loading_seg_;
     //We assume that a single segment can build complete frames
     std::string segment_buffer_;
     std::map<std::string, std::string> media_headers_;

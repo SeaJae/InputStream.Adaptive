@@ -212,6 +212,7 @@ public:
   // AP4_Referenceable methods
   void AddReference() override {};
   void Release()override      {};
+  bool waitingForSegment() const { return stream_->waitingForSegment(); }
 protected:
   // members
   adaptive::AdaptiveStream *stream_;
@@ -1222,9 +1223,10 @@ class TSSampleReader : public SampleReader, public TSReader
 public:
   TSSampleReader(AP4_ByteStream *input, INPUTSTREAM_INFO::STREAM_TYPE type, AP4_UI32 streamId, uint32_t requiredMask)
     : TSReader(input, requiredMask)
+    , m_stream(dynamic_cast<AP4_DASHStream*>(input))
     , m_typeMask(1 << type)
   {
-    m_typeMap[type] = streamId;
+    m_typeMap[type] = m_typeMap[INPUTSTREAM_INFO::TYPE_NONE] = streamId;
   };
 
   virtual void AddStreamType(INPUTSTREAM_INFO::STREAM_TYPE type, uint16_t sid) override
@@ -1288,7 +1290,8 @@ public:
       }
       return AP4_SUCCESS;
     }
-    m_eos = true;
+    if (!m_stream || !m_stream->waitingForSegment())
+      m_eos = true;
     return AP4_ERROR_EOS;
   }
 
@@ -1340,6 +1343,7 @@ private:
   uint64_t m_dts = 0;
   int64_t m_ptsDiff = 0;
   uint64_t m_ptsOffs = ~0ULL;
+  AP4_DASHStream *m_stream;
 };
 
 /*******************************************************
@@ -1947,13 +1951,14 @@ AP4_Movie *Session::PrepareStream(STREAM *stream)
 
 SampleReader *Session::GetNextSample()
 {
-  STREAM *res(0);
+  STREAM *res(0), *waiting(0);
   for (std::vector<STREAM*>::const_iterator b(streams_.begin()), e(streams_.end()); b != e; ++b)
   {
     bool bStarted(false);
-    if ((*b)->enabled && (*b)->reader_ && !(*b)->reader_->EOS() && AP4_SUCCEEDED((*b)->reader_->Start(bStarted))
-      && (!res || (*b)->reader_->DTS() < res->reader_->DTS()))
-      res = *b;
+    if ((*b)->enabled && (*b)->reader_ && !(*b)->reader_->EOS()
+    && AP4_SUCCEEDED((*b)->reader_->Start(bStarted))
+    && (!res || (*b)->reader_->DTS() < res->reader_->DTS()))
+      ((*b)->stream_.waitingForSegment() ? waiting : res) = *b;
 
     if (bStarted && ((*b)->reader_->GetInformation((*b)->info_)))
       changed_ = true;
@@ -1967,6 +1972,11 @@ SampleReader *Session::GetNextSample()
     if (res->reader_->PTS() != DVD_NOPTS_VALUE)
       elapsed_time_ = res->reader_->Elapsed(res->stream_.GetStartPTS());
     return res->reader_;
+  }
+  else if (waiting)
+  {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    return waiting->reader_;
   }
   return 0;
 }
@@ -2023,7 +2033,7 @@ void Session::OnSegmentChanged(adaptive::AdaptiveStream *stream)
     }
 }
 
-void Session::OnStreamChange(adaptive::AdaptiveStream *stream, uint32_t segment)
+void Session::OnStreamChange(adaptive::AdaptiveStream *stream)
 {
 }
 

@@ -20,6 +20,7 @@
 #include <string.h>
 #include <algorithm>
 #include <stdlib.h>
+#include <chrono>
 #include "../log.h"
 
 namespace adaptive
@@ -54,8 +55,11 @@ namespace adaptive
     , encryptionState_(ENCRYTIONSTATE_UNENCRYPTED)
     , included_types_(0)
     , need_secure_decoder_(false)
+    , updateInterval_(~0)
+    , updateThread_(nullptr)
   {
     psshSets_.push_back(PSSH());
+    waitMutex_.lock();
   }
 
   AdaptiveTree::~AdaptiveTree()
@@ -72,6 +76,14 @@ namespace adaptive
             if((*br)->flags_ & Representation::INITIALIZATION)
               delete[] (*br)->initialization_.url;
           }
+
+    has_timeshift_buffer_ = false;
+    waitMutex_.unlock();
+    if (updateThread_)
+    {
+      updateThread_->join();
+      delete updateThread_;
+    }
   }
 
   bool AdaptiveTree::has_type(StreamType t)
@@ -93,7 +105,7 @@ namespace adaptive
 
   void AdaptiveTree::set_download_speed(double speed)
   {
-    std::lock_guard<std::mutex> lck(m_mutex);
+    std::lock_guard<std::mutex> lck(treeMutex_);
 
     download_speed_ = speed;
     if (!average_download_speed_)
@@ -245,4 +257,18 @@ namespace adaptive
     }
   }
 
+  void AdaptiveTree::StartUpdateThread()
+  {
+    if (!updateThread_ && ~updateInterval_ && has_timeshift_buffer_ && !update_parameter_.empty())
+      updateThread_ = new std::thread(&AdaptiveTree::SegmentUpdateWorker, this);
+  }
+
+  void AdaptiveTree::SegmentUpdateWorker()
+  {
+    while (~updateInterval_ && has_timeshift_buffer_)
+    {
+      if (!waitMutex_.try_lock_for(std::chrono::milliseconds(updateInterval_)))
+        RefreshSegments();
+    }
+  }
 } // namespace
