@@ -185,9 +185,10 @@ bool TSReader::ReadPacket(bool scanStreamInfo)
 
   while (!ret)
   {
-    if (m_AVContext->TSResync() != TSDemux::AVCONTEXT_CONTINUE)
+    int errorCode;
+    if ((errorCode = m_AVContext->TSResync()) != TSDemux::AVCONTEXT_CONTINUE)
     {
-      if (m_AVContext->TSResync() != TSDemux::AVCONTEXT_IO_ERROR)
+      if (errorCode != TSDemux::AVCONTEXT_IO_ERROR)
         return false;
       //Lets make one retry with the new segment
       Reset(false);

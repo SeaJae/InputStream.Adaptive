@@ -461,6 +461,7 @@ void HLSTree::OnDataArrived(Representation *rep, const Segment *seg, const uint8
     //Encrypted media, decrypt it
     if (pssh.defaultKID_.empty())
     {
+RETRY:
       ClearStream();
       std::map<std::string, std::string> headers;
       std::vector<std::string> keyParts(split(m_decrypter->getLicenseKey(), '|'));
@@ -470,10 +471,17 @@ void HLSTree::OnDataArrived(Representation *rep, const Segment *seg, const uint8
       {
         pssh.defaultKID_ = m_stream.str();
       }
-      else
-        pssh.defaultKID_ = "0000000000000000";
+      else if (pssh.defaultKID_ != "0")
+      {
+        pssh.defaultKID_ = "0";
+        if (keyParts.size() >= 5 && !keyParts[4].empty() && m_decrypter->RenewLicense(keyParts[4]))
+          goto RETRY;
+      }
     }
-    if (!dstOffset)
+
+    if (pssh.defaultKID_ == "0")
+      memset(dst + dstOffset, 0, dataSize);
+    else if (!dstOffset)
     {
       if (pssh.iv.empty())
         m_decrypter->ivFromSequence(m_iv, rep->startNumber_ + rep->segments_.pos(seg));
