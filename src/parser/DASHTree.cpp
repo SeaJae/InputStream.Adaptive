@@ -1452,7 +1452,7 @@ void DASHTree::RefreshSegments()
                 {
                   //Here we go -> Insert new segments
                   uint64_t ptsOffset = (*brd)->nextPts_ - (*br)->segments_[0]->startPTS_;
-                  unsigned int repFreeSegments((*brd)->getCurrentSegmentPos());
+                  unsigned int repFreeSegments((*brd)->getCurrentSegmentPos() + 1);
                   std::vector<Segment>::iterator bs((*br)->segments_.data.begin()), es((*br)->segments_.data.end());
                   for (; bs != es && repFreeSegments; ++bs)
                   {
@@ -1466,6 +1466,9 @@ void DASHTree::RefreshSegments()
                     ++(*brd)->startNumber_;
                     --repFreeSegments;
                   }
+                  //We have renewed the current segment
+                  if (!repFreeSegments)
+                    (*brd)->current_segment_ = nullptr;
                   if (bs == es)
                     (*brd)->nextPts_ += (*br)->nextPts_;
                   else
@@ -1474,29 +1477,46 @@ void DASHTree::RefreshSegments()
                 else if ((*br)->startNumber_ <=1 ) //Full update, be careful with startnumbers!
                 {
                   //TODO: check if first element or size differs
-                  (*br)->segments_.swap((*brd)->newSegments_);
-                  (*brd)->newStartNumber_ = (*brd)->startNumber_;
-                  if (!(*brd)->newSegments_.empty())
+                  unsigned int segmentId((*brd)->startNumber_ + (*brd)->getCurrentSegmentPos());
+                  if (!(*br)->segments_.empty())
                   {
-                    uint64_t searchPts = (*brd)->newSegments_[0]->startPTS_;
+                    uint64_t searchPts = (*br)->segments_[0]->startPTS_;
                     for (const auto &s : (*brd)->segments_.data)
                     {
                       if (s.startPTS_ >= searchPts)
                         break;
-                      ++(*brd)->newStartNumber_;
+                      ++(*brd)->startNumber_;
+                    }
+                    (*br)->segments_.swap((*brd)->segments_);
+                    if (segmentId < (*brd)->startNumber_)
+                      (*brd)->current_segment_ = nullptr;
+                    else
+                    {
+                      if (segmentId >= (*brd)->startNumber_ + (*brd)->segments_.size())
+                        segmentId = (*brd)->startNumber_ + (*brd)->segments_.size() - 1;
+                      (*brd)->current_segment_ = (*brd)->get_segment(segmentId - (*brd)->startNumber_);
                     }
                   }
-                  Log(LOGLEVEL_DEBUG, "DASH Full update (w/o startnum): repid: %s current_start:%u, new_start:%u",
-                    (*br)->id.c_str(), (*brd)->startNumber_, (*brd)->newStartNumber_);
+                  Log(LOGLEVEL_DEBUG, "DASH Full update (w/o startnum): repid: %s current_start:%u",
+                    (*br)->id.c_str(), (*brd)->startNumber_);
                 }
                 else if ((*br)->startNumber_ > (*brd)->startNumber_ 
                   || ((*br)->startNumber_ == (*brd)->startNumber_ 
                     && (*br)->segments_.size() > (*brd)->segments_.size()))
                 {
-                  (*br)->segments_.swap((*brd)->newSegments_);
-                  (*brd)->newStartNumber_ = (*br)->startNumber_;
-                  Log(LOGLEVEL_DEBUG, "DASH Full update (w/ startnum): repid: %s current_start:%u, new_start:%u",
-                    (*br)->id.c_str(), (*brd)->startNumber_, (*brd)->newStartNumber_);
+                  unsigned int segmentId((*brd)->startNumber_ + (*brd)->getCurrentSegmentPos());
+                  (*br)->segments_.swap((*brd)->segments_);
+                  (*brd)->startNumber_ = (*br)->startNumber_;
+                  if (segmentId < (*brd)->startNumber_)
+                    (*brd)->current_segment_ = nullptr;
+                  else
+                  {
+                    if (segmentId >= (*brd)->startNumber_ + (*brd)->segments_.size())
+                      segmentId = (*brd)->startNumber_ + (*brd)->segments_.size() - 1;
+                    (*brd)->current_segment_ = (*brd)->get_segment(segmentId - (*brd)->startNumber_);
+                  }
+                  Log(LOGLEVEL_DEBUG, "DASH Full update (w/ startnum): repid: %s current_start:%u",
+                    (*br)->id.c_str(), (*brd)->startNumber_);
                 }
               }
             }

@@ -275,27 +275,6 @@ bool AdaptiveStream::restart_stream()
   return true;
 }
 
-void AdaptiveStream::swapNewSegments()
-{
-  if (~current_rep_->newStartNumber_)
-  {
-    unsigned int segmentId(current_rep_->startNumber_ + current_rep_->getCurrentSegmentPos());
-
-    current_rep_->segments_.swap(current_rep_->newSegments_);
-    current_rep_->startNumber_ = current_rep_->newStartNumber_;
-    current_rep_->newStartNumber_ = ~0;
-    if (segmentId < current_rep_->startNumber_)
-    {
-      current_rep_->current_segment_ = nullptr;
-      return;
-    }
-    if (segmentId >= current_rep_->startNumber_ + current_rep_->segments_.size())
-      segmentId = current_rep_->startNumber_ + current_rep_->segments_.size() - 1;
-
-    current_rep_->current_segment_ = current_rep_->get_segment(segmentId - current_rep_->startNumber_);
-  }
-}
-
 bool AdaptiveStream::ensureSegment()
 {
   if (stopped_)
@@ -306,8 +285,6 @@ bool AdaptiveStream::ensureSegment()
     //wait until worker is ready for new segment
     std::lock_guard<std::mutex> lck(thread_data_->mutex_dl_);
     std::lock_guard<std::mutex> lckTree(tree_.GetTreeMutex());
-
-    swapNewSegments();
 
     const AdaptiveTree::Segment *nextSegment = current_rep_->get_next_segment(current_rep_->current_segment_);
     if (nextSegment)
@@ -394,8 +371,6 @@ bool AdaptiveStream::seek_time(double seek_seconds, bool preceeding, bool &needR
   if (!current_rep_ || stopped_)
     return false;
 
-  swapNewSegments();
-
   if (current_rep_->flags_ & AdaptiveTree::Representation::SUBTITLESTREAM)
     return true;
 
@@ -456,6 +431,7 @@ bool AdaptiveStream::waitingForSegment() const
     std::lock_guard<std::mutex> lckTree(tree_.GetTreeMutex());
     return current_rep_ ? (current_rep_->flags_ & AdaptiveTree::Representation::WAITFORSEGMENT) != 0 : false;
   }
+  return false;
 }
 
 bool AdaptiveStream::select_stream(bool force, bool justInit, unsigned int repId)

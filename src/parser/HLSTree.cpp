@@ -261,7 +261,13 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
   {
     ClearStream();
 
-    SPINCACHE<Segment> &segments(update ? rep->newSegments_ : rep->segments_);
+    SPINCACHE<Segment> newSegments;
+    unsigned int newStartNumber;
+    unsigned int segmentId(rep->startNumber_ + rep->getCurrentSegmentPos());
+
+    SPINCACHE<Segment> &segments(update ? newSegments : rep->segments_);
+    FreeSegments(rep);
+
     if (rep->flags_ & Representation::URLSEGMENTS)
       for (auto &s : segments.data)
       {
@@ -285,7 +291,7 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
       bool startCodeFound(false);
       Segment segment;
       uint64_t pts(0);
-      (update ? rep->newStartNumber_ : rep->startNumber_) = 0;
+      (update ? newStartNumber : rep->startNumber_) = 0;
 
       segment.range_begin_ = ~0ULL;
       segment.range_end_ = 0;
@@ -369,7 +375,7 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
         else if (line.compare(0, 22, "#EXT-X-MEDIA-SEQUENCE:") == 0)
         {
           if (update)
-            rep->newStartNumber_ = atol(line.c_str() + 22);
+            newStartNumber = atol(line.c_str() + 22);
           else
             rep->startNumber_ = atol(line.c_str() + 22);
         }
@@ -439,7 +445,22 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
       return false;
     }
 
-    if (!update)
+    if (update)
+    {
+      rep->segments_.swap(newSegments);
+      rep->startNumber_ = newStartNumber;
+      if (segmentId < rep->startNumber_)
+        rep->current_segment_ = nullptr;
+      else
+      {
+        if (segmentId >= rep->startNumber_ + rep->segments_.size())
+          segmentId = rep->startNumber_ + rep->segments_.size() - 1;
+        rep->current_segment_ = rep->get_segment(segmentId - rep->startNumber_);
+      }
+      if ((rep->flags_ & Representation::WAITFORSEGMENT) && rep->get_next_segment(rep->current_segment_))
+        rep->flags_ &= ~Representation::WAITFORSEGMENT;
+    }
+    else
       StartUpdateThread();
 
     return true;
@@ -505,9 +526,6 @@ void HLSTree::RefreshSegments()
       for (std::vector<AdaptationSet*>::const_iterator ba((*bp)->adaptationSets_.begin()), ea((*bp)->adaptationSets_.end()); ba != ea; ++ba)
         for (std::vector<Representation*>::iterator br((*ba)->repesentations_.begin()), er((*ba)->repesentations_.end()); br != er; ++br)
           if ((*br)->flags_ & Representation::ENABLED)
-          {
             prepareRepresentation((*br), true);
-            (*br)->flags_ &= ~Representation::WAITFORSEGMENT;
-          }
   }
 }

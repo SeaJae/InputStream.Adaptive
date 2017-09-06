@@ -132,7 +132,7 @@ namespace adaptive
     {
       Representation() :bandwidth_(0), samplingRate_(0), width_(0), height_(0), fpsRate_(0), fpsScale_(1), aspect_(0.0f),
         flags_(0), hdcpVersion_(0), indexRangeMin_(0), indexRangeMax_(0), channelCount_(0), nalLengthSize_(0), pssh_set_(0), expired_segments_(0),
-        containerType_(AdaptiveTree::CONTAINERTYPE_MP4), startNumber_(1), newStartNumber_(~0), nextPts_(0), duration_(0), timescale_(0), current_segment_(nullptr) {};
+        containerType_(AdaptiveTree::CONTAINERTYPE_MP4), startNumber_(1), nextPts_(0), duration_(0), timescale_(0), current_segment_(nullptr) {};
       std::string url_;
       std::string id;
       std::string codecs_;
@@ -166,13 +166,13 @@ namespace adaptive
       uint32_t expired_segments_;
       ContainerType containerType_;
       SegmentTemplate segtpl_;
-      unsigned int startNumber_, newStartNumber_;
+      unsigned int startNumber_;
       uint64_t nextPts_;
       //SegmentList
       uint32_t duration_, timescale_;
       uint32_t timescale_ext_, timescale_int_;
       Segment initialization_;
-      SPINCACHE<Segment> segments_, newSegments_;
+      SPINCACHE<Segment> segments_;
       const Segment *current_segment_;
       const Segment *get_initialization()const { return (flags_ & INITIALIZATION) ? &initialization_ : 0; };
       const Segment *get_next_segment(const Segment *seg)const
@@ -341,6 +341,7 @@ namespace adaptive
 
     uint16_t insert_psshset(StreamType type);
     bool has_type(StreamType t);
+    void FreeSegments(Representation *rep);
     uint32_t estimate_segcount(uint32_t duration, uint32_t timescale);
     double get_download_speed() const { return download_speed_; };
     double get_average_download_speed() const { return average_download_speed_; };

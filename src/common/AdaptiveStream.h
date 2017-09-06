@@ -81,7 +81,6 @@ namespace adaptive
     void ResetSegment();
     bool download_segment();
     void worker();
-    void swapNewSegments();
 
     struct THREADDATA
     {

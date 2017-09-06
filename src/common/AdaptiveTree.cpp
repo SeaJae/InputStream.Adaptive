@@ -71,8 +71,6 @@ namespace adaptive
           {
             for (std::vector<Segment>::iterator bs((*br)->segments_.data.begin()), es((*br)->segments_.data.end()); bs != es; ++bs)
               delete[] bs->url;
-            for (std::vector<Segment>::iterator bs((*br)->newSegments_.data.begin()), es((*br)->newSegments_.data.end()); bs != es; ++bs)
-              delete[] bs->url;
             if((*br)->flags_ & Representation::INITIALIZATION)
               delete[] (*br)->initialization_.url;
           }
@@ -85,6 +83,21 @@ namespace adaptive
       delete updateThread_;
     }
   }
+
+  void AdaptiveTree::FreeSegments(Representation *rep)
+  {
+    for (std::vector<Segment>::iterator bs(rep->segments_.data.begin()), es(rep->segments_.data.end()); bs != es; ++bs)
+    {
+      --psshSets_[bs->pssh_set_].use_count_;
+      if (rep->flags_ & Representation::URLSEGMENTS)
+        delete[] bs->url;
+    }
+    if (rep->flags_ & (Representation::INITIALIZATION | Representation::URLSEGMENTS) == (Representation::INITIALIZATION | Representation::URLSEGMENTS))
+      delete[]rep->initialization_.url;
+    rep->segments_.clear();
+    rep->current_segment_ = nullptr;
+  }
+
 
   bool AdaptiveTree::has_type(StreamType t)
   {
