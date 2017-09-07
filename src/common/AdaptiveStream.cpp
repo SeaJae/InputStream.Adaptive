@@ -294,6 +294,8 @@ bool AdaptiveStream::ensureSegment()
     std::lock_guard<std::mutex> lck(thread_data_->mutex_dl_);
     std::lock_guard<std::mutex> lckTree(tree_.GetTreeMutex());
 
+    tree_.RefreshSegments(current_rep_, current_adp_->type_);
+
     const AdaptiveTree::Segment *nextSegment = current_rep_->get_next_segment(current_rep_->current_segment_);
     if (nextSegment)
     {
@@ -439,7 +441,8 @@ bool AdaptiveStream::waitingForSegment() const
   if (tree_.HasUpdateThread())
   {
     std::lock_guard<std::mutex> lckTree(tree_.GetTreeMutex());
-    return current_rep_ ? (current_rep_->flags_ & AdaptiveTree::Representation::WAITFORSEGMENT) != 0 : false;
+    if (current_rep_ && (current_rep_->flags_ & AdaptiveTree::Representation::WAITFORSEGMENT) != 0)
+      return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - current_rep_->lastUpdated_).count() < 1;
   }
   return false;
 }

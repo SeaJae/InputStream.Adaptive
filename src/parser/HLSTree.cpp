@@ -263,7 +263,7 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
 
     SPINCACHE<Segment> newSegments;
     unsigned int newStartNumber;
-    unsigned int segmentId(rep->startNumber_ + rep->getCurrentSegmentPos());
+    uint32_t segmentId(rep->getCurrentSegmentNumber());
 
     SPINCACHE<Segment> &segments(update ? newSegments : rep->segments_);
     FreeSegments(rep);
@@ -275,6 +275,8 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
         delete[] s.url;
       }
     segments.clear();
+
+    rep->lastUpdated_ = std::chrono::system_clock::now();
 
     if (download(rep->source_url_.c_str(), manifest_headers_))
     {
@@ -389,7 +391,7 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
         }
         else if (line.compare(0, 22, "#EXT-X-TARGETDURATION:") == 0)
         {
-          uint32_t newInterval = atoi(line.c_str() + 22) * 1000;
+          uint32_t newInterval = atoi(line.c_str() + 22) * 1500;
           if (newInterval < updateInterval_)
             updateInterval_ = newInterval;
         }
@@ -449,7 +451,7 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
     {
       rep->segments_.swap(newSegments);
       rep->startNumber_ = newStartNumber;
-      if (segmentId < rep->startNumber_)
+      if (!segmentId || segmentId < rep->startNumber_)
         rep->current_segment_ = nullptr;
       else
       {
@@ -517,6 +519,18 @@ RETRY:
     AdaptiveTree::OnDataArrived(segNum, psshSet, src, dst, dstOffset, dataSize);
 }
 
+//Called each time before we switch to a new segment
+void HLSTree::RefreshSegments(Representation *rep, StreamType type)
+{
+  if (m_refreshPlayList && std::chrono::duration_cast<std::chrono::seconds>(
+    std::chrono::system_clock::now() - rep->lastUpdated_).count() > 0)
+  {
+    RefreshUpdateThread();
+    prepareRepresentation(rep, true);
+  }
+}
+
+//Called form update-thread
 void HLSTree::RefreshSegments()
 {
   if (m_refreshPlayList)

@@ -92,7 +92,8 @@ namespace adaptive
       if (rep->flags_ & Representation::URLSEGMENTS)
         delete[] bs->url;
     }
-    if (rep->flags_ & (Representation::INITIALIZATION | Representation::URLSEGMENTS) == (Representation::INITIALIZATION | Representation::URLSEGMENTS))
+    if ((rep->flags_ & (Representation::INITIALIZATION | Representation::URLSEGMENTS))
+      == (Representation::INITIALIZATION | Representation::URLSEGMENTS))
       delete[]rep->initialization_.url;
     rep->segments_.clear();
     rep->current_segment_ = nullptr;
@@ -270,6 +271,18 @@ namespace adaptive
     }
   }
 
+  void AdaptiveTree::RefreshUpdateThread()
+  {
+    if (HasUpdateThread())
+    {
+      refreshed_ = false;
+      waitMutex_.unlock();
+      while (!refreshed_)
+        std::this_thread::yield();
+      waitMutex_.lock();
+    }
+  }
+
   void AdaptiveTree::StartUpdateThread()
   {
     if (!updateThread_ && ~updateInterval_ && has_timeshift_buffer_ && !update_parameter_.empty())
@@ -282,6 +295,9 @@ namespace adaptive
     {
       if (!waitMutex_.try_lock_for(std::chrono::milliseconds(updateInterval_)))
         RefreshSegments();
+      else
+        waitMutex_.unlock();
+      refreshed_ = true;
     }
   }
 } // namespace

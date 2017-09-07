@@ -25,6 +25,7 @@
 #include "expat.h"
 #include <thread>
 #include <mutex>
+#include <chrono>
 
 namespace adaptive
 {
@@ -171,6 +172,7 @@ namespace adaptive
       //SegmentList
       uint32_t duration_, timescale_;
       uint32_t timescale_ext_, timescale_int_;
+      std::chrono::time_point<std::chrono::system_clock> lastUpdated_;
       Segment initialization_;
       SPINCACHE<Segment> segments_;
       const Segment *current_segment_;
@@ -200,9 +202,14 @@ namespace adaptive
         return pssh_set_;
       }
 
-      size_t getCurrentSegmentPos() const
+      uint32_t getCurrentSegmentPos() const
       {
         return get_segment_pos(current_segment_);
+      };
+
+      uint32_t getCurrentSegmentNumber() const
+      {
+        return current_segment_ ? get_segment_pos(current_segment_) + startNumber_ : ~0U;
       };
 
       uint64_t GetCurrentPTSOffset() const
@@ -338,6 +345,7 @@ namespace adaptive
     virtual bool open(const std::string &url, const std::string &manifestUpdateParam) = 0;
     virtual bool prepareRepresentation(Representation *rep, bool update = false) { return true; };
     virtual void OnDataArrived(unsigned int segNum, uint16_t psshSet, const uint8_t *src, uint8_t *dst, size_t dstOffset, size_t dataSize);
+    virtual void RefreshSegments(Representation *rep, StreamType type) {};
 
     uint16_t insert_psshset(StreamType type);
     bool has_type(StreamType t);
@@ -352,6 +360,7 @@ namespace adaptive
     const AdaptationSet *GetAdaptationSet(unsigned int pos) const { return current_period_ && pos < current_period_->adaptationSets_.size() ? current_period_->adaptationSets_[pos] : 0; };
     std::mutex &GetTreeMutex() { return treeMutex_; };
     bool HasUpdateThread() const { return updateThread_ != 0 && has_timeshift_buffer_ && updateInterval_ && !update_parameter_.empty(); };
+    void RefreshUpdateThread();
 protected:
   virtual bool download(const char* url, const std::map<std::string, std::string> &manifestHeaders);
   virtual bool write_data(void *buffer, size_t buffer_size) = 0;
@@ -368,6 +377,7 @@ protected:
   std::thread *updateThread_;
 private:
   void SegmentUpdateWorker();
+  bool refreshed_;
 };
 
 }

@@ -37,7 +37,11 @@ namespace adaptive
     virtual bool prepareRepresentation(Representation *rep, bool update = false) override;
     virtual bool write_data(void *buffer, size_t buffer_size) override;
     virtual void OnDataArrived(unsigned int segNum, uint16_t psshSet, const uint8_t *src, uint8_t *dst, size_t dstOffset, size_t dataSize) override;
+    virtual void RefreshSegments(Representation *rep, StreamType type) override;
+
+  protected:
     virtual void RefreshSegments() override;
+
   private:
     void ClearStream();
     std::stringstream m_stream;

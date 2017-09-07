@@ -1424,6 +1424,7 @@ void DASHTree::RefreshSegments()
     {
       etag_ = updateTree.etag_;
       last_modified_ = updateTree.last_modified_;
+      std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
 
       //Youtube returns last smallest number in case the requested data is not available
       if (~update_parameter_pos_ && updateTree.firstStartNumber_ < nextStartNumber_)
@@ -1448,6 +1449,7 @@ void DASHTree::RefreshSegments()
               for (; brd != erd && (*brd)->id != (*br)->id; ++brd);
               if (brd != erd && !(*br)->segments_.empty())
               {
+                (*brd)->lastUpdated_ = now;
                 if (~update_parameter_pos_) // partitial update
                 {
                   //Here we go -> Insert new segments
@@ -1477,7 +1479,7 @@ void DASHTree::RefreshSegments()
                 else if ((*br)->startNumber_ <=1 ) //Full update, be careful with startnumbers!
                 {
                   //TODO: check if first element or size differs
-                  unsigned int segmentId((*brd)->startNumber_ + (*brd)->getCurrentSegmentPos());
+                  unsigned int segmentId((*brd)->getCurrentSegmentNumber());
                   if (!(*br)->segments_.empty())
                   {
                     uint64_t searchPts = (*br)->segments_[0]->startPTS_;
@@ -1488,7 +1490,7 @@ void DASHTree::RefreshSegments()
                       ++(*brd)->startNumber_;
                     }
                     (*br)->segments_.swap((*brd)->segments_);
-                    if (segmentId < (*brd)->startNumber_)
+                    if (!~segmentId || segmentId < (*brd)->startNumber_)
                       (*brd)->current_segment_ = nullptr;
                     else
                     {
@@ -1504,10 +1506,10 @@ void DASHTree::RefreshSegments()
                   || ((*br)->startNumber_ == (*brd)->startNumber_ 
                     && (*br)->segments_.size() > (*brd)->segments_.size()))
                 {
-                  unsigned int segmentId((*brd)->startNumber_ + (*brd)->getCurrentSegmentPos());
+                  unsigned int segmentId((*brd)->getCurrentSegmentNumber());
                   (*br)->segments_.swap((*brd)->segments_);
                   (*brd)->startNumber_ = (*br)->startNumber_;
-                  if (segmentId < (*brd)->startNumber_)
+                  if (!~segmentId || segmentId < (*brd)->startNumber_)
                     (*brd)->current_segment_ = nullptr;
                   else
                   {
