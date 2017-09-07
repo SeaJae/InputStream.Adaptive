@@ -76,6 +76,7 @@ namespace adaptive
     virtual bool download(const char* url, const std::map<std::string, std::string> &mediaHeaders){ return false; };
     virtual bool parseIndexRange() { return false; };
     bool write_data(const void *buffer, size_t buffer_size);
+    bool PrepareDownload(const AdaptiveTree::Segment *seg);
   private:
     // Segment download section
     void ResetSegment();
@@ -115,10 +116,10 @@ namespace adaptive
     const AdaptiveTree::Period *current_period_;
     const AdaptiveTree::AdaptationSet *current_adp_;
     AdaptiveTree::Representation *current_rep_;
-    const AdaptiveTree::Segment *loading_seg_;
+    std::string download_url_;
     //We assume that a single segment can build complete frames
     std::string segment_buffer_;
-    std::map<std::string, std::string> media_headers_;
+    std::map<std::string, std::string> media_headers_, download_headers_;
     std::size_t segment_read_pos_;
     uint64_t absolute_position_;
     uint64_t start_PTS_;
@@ -127,6 +128,8 @@ namespace adaptive
     uint32_t bandwidth_;
     uint32_t hdcpLimit_;
     uint16_t hdcpVersion_;
+    uint16_t download_pssh_set_;
+    unsigned int download_segNum_;
     bool stopped_;
   };
 };

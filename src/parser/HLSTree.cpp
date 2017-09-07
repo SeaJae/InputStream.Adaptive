@@ -474,11 +474,11 @@ bool HLSTree::write_data(void *buffer, size_t buffer_size)
   return true;
 }
 
-void HLSTree::OnDataArrived(Representation *rep, const Segment *seg, const uint8_t *src, uint8_t *dst, size_t dstOffset, size_t dataSize)
+void HLSTree::OnDataArrived(unsigned int segNum, uint16_t psshSet, const uint8_t *src, uint8_t *dst, size_t dstOffset, size_t dataSize)
 {
-  if (seg->pssh_set_)
+  if (psshSet)
   {
-    PSSH &pssh(psshSets_[seg->pssh_set_]);
+    PSSH &pssh(psshSets_[psshSet]);
     //Encrypted media, decrypt it
     if (pssh.defaultKID_.empty())
     {
@@ -505,7 +505,7 @@ RETRY:
     else if (!dstOffset)
     {
       if (pssh.iv.empty())
-        m_decrypter->ivFromSequence(m_iv, rep->startNumber_ + rep->segments_.pos(seg));
+        m_decrypter->ivFromSequence(m_iv, segNum);
       else
         memcpy(m_iv, pssh.iv.data(), 16);
     }
@@ -514,7 +514,7 @@ RETRY:
       memcpy(m_iv, src + (dataSize - 16), 16);
   }
   else
-    AdaptiveTree::OnDataArrived(rep, seg, src, dst, dstOffset, dataSize);
+    AdaptiveTree::OnDataArrived(segNum, psshSet, src, dst, dstOffset, dataSize);
 }
 
 void HLSTree::RefreshSegments()

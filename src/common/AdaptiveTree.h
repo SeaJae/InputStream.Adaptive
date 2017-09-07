@@ -337,7 +337,7 @@ namespace adaptive
 
     virtual bool open(const std::string &url, const std::string &manifestUpdateParam) = 0;
     virtual bool prepareRepresentation(Representation *rep, bool update = false) { return true; };
-    virtual void OnDataArrived(Representation *rep, const Segment *seg, const uint8_t *src, uint8_t *dst, size_t dstOffset, size_t dataSize);
+    virtual void OnDataArrived(unsigned int segNum, uint16_t psshSet, const uint8_t *src, uint8_t *dst, size_t dstOffset, size_t dataSize);
 
     uint16_t insert_psshset(StreamType type);
     bool has_type(StreamType t);
