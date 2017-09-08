@@ -535,7 +535,6 @@ void HLSTree::RefreshSegments()
 {
   if (m_refreshPlayList)
   {
-    std::lock_guard<std::mutex> lck(treeMutex_);
     for (std::vector<Period*>::const_iterator bp(periods_.begin()), ep(periods_.end()); bp != ep; ++bp)
       for (std::vector<AdaptationSet*>::const_iterator ba((*bp)->adaptationSets_.begin()), ea((*bp)->adaptationSets_.end()); ba != ea; ++ba)
         for (std::vector<Representation*>::iterator br((*ba)->repesentations_.begin()), er((*ba)->repesentations_.end()); br != er; ++br)

@@ -244,18 +244,22 @@ namespace adaptive
         }
       }
     }
-    else if (manifestUpdateParam == "full")
-    {
+    else
       update_parameter_ = manifestUpdateParam;
-    }
 
     if (!update_parameter_.empty())
     {
-      update_parameter_pos_ = update_parameter_.find("$START_NUMBER$");
-      if (update_parameter_[0] == '&' && manifest_url_.find("?") == std::string::npos)
-        update_parameter_[0] = '?';
+      if (update_parameter_ != "full")
+      {
+        if ((update_parameter_pos_ = update_parameter_.find("$START_NUMBER$")) != std::string::npos)
+        {
+          if (update_parameter_[0] == '&' && manifest_url_.find("?") == std::string::npos)
+            update_parameter_[0] = '?';
+        }
+        else
+          update_parameter_.clear();
+      }
     }
-
     return true;
   }
 
@@ -293,8 +297,11 @@ namespace adaptive
     std::unique_lock<std::mutex> updLck(updateMutex_);
     while (~updateInterval_ && has_timeshift_buffer_)
     {
-      if (updateVar_.wait_for(updLck,std::chrono::milliseconds(updateInterval_)) == std::cv_status::timeout)
+      if (updateVar_.wait_for(updLck, std::chrono::milliseconds(updateInterval_)) == std::cv_status::timeout)
+      {
+        std::lock_guard<std::mutex> lck(treeMutex_);
         RefreshSegments();
+      }
     }
   }
 } // namespace

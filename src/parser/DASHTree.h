@@ -19,7 +19,6 @@
 #pragma once
 
 #include "../common/AdaptiveTree.h"
-#include <chrono>
 
 namespace adaptive
 {
@@ -30,11 +29,14 @@ namespace adaptive
     DASHTree();
     virtual bool open(const std::string &url, const std::string &manifestUpdateParam) override;
     virtual bool write_data(void *buffer, size_t buffer_size) override;
+    virtual void RefreshSegments(Representation *rep, StreamType type) override;
 
     uint64_t pts_helper_;
+    uint32_t firstStartNumber_;
   protected:
     virtual void RefreshSegments() override;
   private:
-    uint32_t firstStartNumber_, nextStartNumber_;
+    StreamType updateStreamType_;
+    std::chrono::time_point<std::chrono::system_clock> lastUpdated_;
   };
 }

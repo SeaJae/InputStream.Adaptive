@@ -954,6 +954,8 @@ start(void *data, const char *el, const char **attr)
     const char *mpt(0), *tsbd(0);
     bool bStatic(false);
 
+    dash->firstStartNumber_ = 0;
+
     dash->overallSeconds_ = 0;
     dash->stream_start_ = time(0);
 
@@ -1187,10 +1189,14 @@ end(void *data, const char *el)
               ReplacePlaceHolders(dash->current_representation_->url_, dash->current_representation_->id, dash->current_representation_->bandwidth_);
               ReplacePlaceHolders(dash->current_representation_->segtpl_.media, dash->current_representation_->id, dash->current_representation_->bandwidth_);
             }
+
+            if ((dash->current_representation_->flags_ & AdaptiveTree::Representation::INITIALIZATION) == 0 && !dash->current_representation_->segments_.empty())
+              // we assume that we have a MOOV atom included in each segment (max 100k = youtube)
+              dash->current_representation_->flags_ |= AdaptiveTree::Representation::INITIALIZATION_PREFIXED;
+
+            if (dash->current_representation_->startNumber_ > dash->firstStartNumber_)
+              dash->firstStartNumber_ = dash->current_representation_->startNumber_;
           }
-          if ((dash->current_representation_->flags_ & AdaptiveTree::Representation::INITIALIZATION) == 0 && !dash->current_representation_->segments_.empty())
-            // we assume that we have a MOOV atom included in each segment (max 100k = youtube)
-            dash->current_representation_->flags_ |= AdaptiveTree::Representation::INITIALIZATION_PREFIXED;
         }
         else if (dash->currentNode_ & MPDNODE_SEGMENTDURATIONS)
         {
@@ -1381,6 +1387,8 @@ bool DASHTree::open(const std::string &url, const std::string &manifestUpdatePar
 
   SortTree();
 
+  updateStreamType_ = NOTYPE;
+
   return ret;
 }
 
@@ -1397,16 +1405,48 @@ bool DASHTree::write_data(void *buffer, size_t buffer_size)
   return true;
 }
 
+//Called each time before we switch to a new segment
+void DASHTree::RefreshSegments(Representation *rep, StreamType type)
+{
+  if ((type == VIDEO || type == AUDIO) && (updateStreamType_ == NOTYPE || updateStreamType_ == type))
+  {
+    updateStreamType_ = type;
+    std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+    if (std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdated_).count())
+    {
+      lastUpdated_ = now;
+      RefreshUpdateThread();
+      RefreshSegments();
+    }
+  }
+}
+
+//Can be called form update-thread!
 void DASHTree::RefreshSegments()
 {
   if (has_timeshift_buffer_ && !update_parameter_.empty())
   {
     std::string replaced;
+    uint32_t numReplace = ~0U;
+    unsigned int nextStartNumber(~0);
+
     if (~update_parameter_pos_)
     {
+      for (std::vector<Period*>::const_iterator bp(periods_.begin()), ep(periods_.end()); bp != ep; ++bp)
+        for (std::vector<AdaptationSet*>::const_iterator ba((*bp)->adaptationSets_.begin()), ea((*bp)->adaptationSets_.end()); ba != ea; ++ba)
+          for (std::vector<Representation*>::iterator br((*ba)->repesentations_.begin()), er((*ba)->repesentations_.end()); br != er; ++br)
+          {
+            if ((*br)->startNumber_ + (*br)->segments_.size() < nextStartNumber)
+              nextStartNumber = (*br)->startNumber_ + (*br)->segments_.size();
+            uint32_t replaceable = (*br)->getCurrentSegmentPos() + 1;
+            if (!replaceable)
+              replaceable = (*br)->segments_.size();
+            if (replaceable < numReplace)
+              numReplace = replaceable;
+          }
       replaced = update_parameter_;
       char buf[32];
-      sprintf(buf, "%u", nextStartNumber_);
+      sprintf(buf, "%u", nextStartNumber);
       replaced.replace(update_parameter_pos_, 14, buf);
     }
 
@@ -1427,10 +1467,8 @@ void DASHTree::RefreshSegments()
       std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
 
       //Youtube returns last smallest number in case the requested data is not available
-      if (~update_parameter_pos_ && updateTree.firstStartNumber_ < nextStartNumber_)
-        return;
-
-      std::lock_guard<std::mutex> lck(treeMutex_);
+      if (~update_parameter_pos_ && updateTree.firstStartNumber_ < nextStartNumber)
+          return;
 
       std::vector<Period*>::const_iterator bpd(periods_.begin()), epd(periods_.end());
       for (std::vector<Period*>::const_iterator bp(updateTree.periods_.begin()), ep(updateTree.periods_.end()); bp != ep && bpd != epd; ++bp, ++bpd)
@@ -1454,7 +1492,8 @@ void DASHTree::RefreshSegments()
                 {
                   //Here we go -> Insert new segments
                   uint64_t ptsOffset = (*brd)->nextPts_ - (*br)->segments_[0]->startPTS_;
-                  unsigned int repFreeSegments((*brd)->getCurrentSegmentPos() + 1);
+                  uint32_t currentPos = (*brd)->getCurrentSegmentPos();
+                  unsigned int repFreeSegments(numReplace);
                   std::vector<Segment>::iterator bs((*br)->segments_.data.begin()), es((*br)->segments_.data.end());
                   for (; bs != es && repFreeSegments; ++bs)
                   {
@@ -1469,8 +1508,12 @@ void DASHTree::RefreshSegments()
                     --repFreeSegments;
                   }
                   //We have renewed the current segment
-                  if (!repFreeSegments)
+                  if (!repFreeSegments && numReplace == currentPos + 1)
                     (*brd)->current_segment_ = nullptr;
+
+                  if (((*brd)->flags_ & Representation::WAITFORSEGMENT) && (*brd)->get_next_segment((*brd)->current_segment_))
+                    (*brd)->flags_ &= ~Representation::WAITFORSEGMENT;
+
                   if (bs == es)
                     (*brd)->nextPts_ += (*br)->nextPts_;
                   else
@@ -1499,6 +1542,10 @@ void DASHTree::RefreshSegments()
                       (*brd)->current_segment_ = (*brd)->get_segment(segmentId - (*brd)->startNumber_);
                     }
                   }
+
+                  if (((*brd)->flags_ & Representation::WAITFORSEGMENT) && (*brd)->get_next_segment((*brd)->current_segment_))
+                    (*brd)->flags_ &= ~Representation::WAITFORSEGMENT;
+
                   Log(LOGLEVEL_DEBUG, "DASH Full update (w/o startnum): repid: %s current_start:%u",
                     (*br)->id.c_str(), (*brd)->startNumber_);
                 }
@@ -1517,6 +1564,10 @@ void DASHTree::RefreshSegments()
                       segmentId = (*brd)->startNumber_ + (*brd)->segments_.size() - 1;
                     (*brd)->current_segment_ = (*brd)->get_segment(segmentId - (*brd)->startNumber_);
                   }
+
+                  if (((*brd)->flags_ & Representation::WAITFORSEGMENT) && (*brd)->get_next_segment((*brd)->current_segment_))
+                    (*brd)->flags_ &= ~Representation::WAITFORSEGMENT;
+
                   Log(LOGLEVEL_DEBUG, "DASH Full update (w/ startnum): repid: %s current_start:%u",
                     (*br)->id.c_str(), (*brd)->startNumber_);
                 }
