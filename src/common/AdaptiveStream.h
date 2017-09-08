@@ -71,7 +71,7 @@ namespace adaptive
     size_t getSegmentPos() { return current_rep_->getCurrentSegmentPos(); };
     uint64_t GetPTSOffset() { return current_rep_->GetCurrentPTSOffset(); };
     uint64_t GetStartPTS() const { return start_PTS_; };
-    bool waitingForSegment() const;
+    bool waitingForSegment(bool checkTime = false) const;
   protected:
     virtual bool download(const char* url, const std::map<std::string, std::string> &mediaHeaders){ return false; };
     virtual bool parseIndexRange() { return false; };

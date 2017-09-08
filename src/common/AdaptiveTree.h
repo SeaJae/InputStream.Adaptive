@@ -25,6 +25,7 @@
 #include "expat.h"
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include <chrono>
 
 namespace adaptive
@@ -372,12 +373,11 @@ protected:
   virtual void RefreshSegments() {};
 
   uint32_t updateInterval_;
-  std::mutex treeMutex_;
-  std::timed_mutex waitMutex_;
+  std::mutex treeMutex_, updateMutex_;
+  std::condition_variable updateVar_;
   std::thread *updateThread_;
 private:
   void SegmentUpdateWorker();
-  bool refreshed_;
 };
 
 }

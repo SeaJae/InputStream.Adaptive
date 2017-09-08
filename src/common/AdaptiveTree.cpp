@@ -59,7 +59,6 @@ namespace adaptive
     , updateThread_(nullptr)
   {
     psshSets_.push_back(PSSH());
-    waitMutex_.lock();
   }
 
   AdaptiveTree::~AdaptiveTree()
@@ -76,9 +75,12 @@ namespace adaptive
           }
 
     has_timeshift_buffer_ = false;
-    waitMutex_.unlock();
     if (updateThread_)
     {
+      {
+        std::lock_guard<std::mutex> lck(updateMutex_);
+        updateVar_.notify_one();
+      }
       updateThread_->join();
       delete updateThread_;
     }
@@ -275,11 +277,8 @@ namespace adaptive
   {
     if (HasUpdateThread())
     {
-      refreshed_ = false;
-      waitMutex_.unlock();
-      while (!refreshed_)
-        std::this_thread::yield();
-      waitMutex_.lock();
+      std::lock_guard<std::mutex> lck(updateMutex_);
+      updateVar_.notify_one();
     }
   }
 
@@ -291,13 +290,11 @@ namespace adaptive
 
   void AdaptiveTree::SegmentUpdateWorker()
   {
+    std::unique_lock<std::mutex> updLck(updateMutex_);
     while (~updateInterval_ && has_timeshift_buffer_)
     {
-      if (!waitMutex_.try_lock_for(std::chrono::milliseconds(updateInterval_)))
+      if (updateVar_.wait_for(updLck,std::chrono::milliseconds(updateInterval_)) == std::cv_status::timeout)
         RefreshSegments();
-      else
-        waitMutex_.unlock();
-      refreshed_ = true;
     }
   }
 } // namespace

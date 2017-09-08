@@ -1958,7 +1958,7 @@ SampleReader *Session::GetNextSample()
     if ((*b)->enabled && (*b)->reader_ && !(*b)->reader_->EOS()
     && AP4_SUCCEEDED((*b)->reader_->Start(bStarted))
     && (!res || (*b)->reader_->DTS() < res->reader_->DTS()))
-      ((*b)->stream_.waitingForSegment() ? waiting : res) = *b;
+      ((*b)->stream_.waitingForSegment(true) ? waiting : res) = *b;
 
     if (bStarted && ((*b)->reader_->GetInformation((*b)->info_)))
       changed_ = true;

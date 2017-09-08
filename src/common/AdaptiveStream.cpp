@@ -436,13 +436,13 @@ bool AdaptiveStream::seek_time(double seek_seconds, bool preceeding, bool &needR
   return false;
 }
 
-bool AdaptiveStream::waitingForSegment() const
+bool AdaptiveStream::waitingForSegment(bool checkTime) const
 {
   if (tree_.HasUpdateThread())
   {
     std::lock_guard<std::mutex> lckTree(tree_.GetTreeMutex());
     if (current_rep_ && (current_rep_->flags_ & AdaptiveTree::Representation::WAITFORSEGMENT) != 0)
-      return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - current_rep_->lastUpdated_).count() < 1;
+      return !checkTime || std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - current_rep_->lastUpdated_).count() < 1;
   }
   return false;
 }
