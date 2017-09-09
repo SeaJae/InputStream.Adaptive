@@ -36,6 +36,7 @@ AdaptiveStream::AdaptiveStream(AdaptiveTree &tree, AdaptiveTree::StreamType type
   , thread_data_(nullptr)
   , segment_read_pos_(0)
   , start_PTS_(0)
+  , lastUpdated_(std::chrono::system_clock::now())
 {
 }
 
@@ -60,12 +61,7 @@ bool AdaptiveStream::download_segment()
   if (download_url_.empty())
     return false;
 
-  if (download(download_url_.c_str(), download_headers_))
-  {
-    start_PTS_ = (current_rep_->segments_[0]->startPTS_ * current_rep_->timescale_ext_) / current_rep_->timescale_int_;
-    return true;
-  }
-  return false;
+  return download(download_url_.c_str(), download_headers_);
 }
 
 void AdaptiveStream::worker()
@@ -95,6 +91,12 @@ void AdaptiveStream::worker()
     thread_data_->signal_rw_.notify_one();
 
   } while (!thread_data_->thread_stop_);
+}
+
+int AdaptiveStream::SecondsSinceUpdate() const
+{
+  const std::chrono::time_point<std::chrono::system_clock> &tPoint(lastUpdated_ > tree_.GetLastUpdated() ? lastUpdated_ : tree_.GetLastUpdated());
+  return static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tPoint).count());
 }
 
 bool AdaptiveStream::write_data(const void *buffer, size_t buffer_size)
@@ -214,6 +216,8 @@ bool AdaptiveStream::PrepareDownload(const AdaptiveTree::Segment *seg)
   if (!seg)
     return false;
 
+  start_PTS_ = (seg->startPTS_ * current_rep_->timescale_ext_) / current_rep_->timescale_int_;
+
   if (observer_ && seg != &current_rep_->initialization_)
     observer_->OnSegmentChanged(this);
 
@@ -294,7 +298,11 @@ bool AdaptiveStream::ensureSegment()
     std::lock_guard<std::mutex> lck(thread_data_->mutex_dl_);
     std::lock_guard<std::mutex> lckTree(tree_.GetTreeMutex());
 
-    tree_.RefreshSegments(current_rep_, current_adp_->type_);
+    if (tree_.HasUpdateThread() && SecondsSinceUpdate() > 1)
+    {
+      tree_.RefreshSegments(current_rep_, current_adp_->type_);
+      lastUpdated_ = std::chrono::system_clock::now();
+    }
 
     const AdaptiveTree::Segment *nextSegment = current_rep_->get_next_segment(current_rep_->current_segment_);
     if (nextSegment)
@@ -307,6 +315,7 @@ bool AdaptiveStream::ensureSegment()
     else if (tree_.HasUpdateThread())
     {
       current_rep_->flags_ |= AdaptiveTree::Representation::WAITFORSEGMENT;
+      Log(LOGLEVEL_DEBUG, "Begin WaitForSegment stream %s", current_rep_->id.c_str());
       return false;
     }
     else
@@ -442,7 +451,7 @@ bool AdaptiveStream::waitingForSegment(bool checkTime) const
   {
     std::lock_guard<std::mutex> lckTree(tree_.GetTreeMutex());
     if (current_rep_ && (current_rep_->flags_ & AdaptiveTree::Representation::WAITFORSEGMENT) != 0)
-      return !checkTime || std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - current_rep_->lastUpdated_).count() < 1;
+      return !checkTime || (current_adp_->type_ != AdaptiveTree::VIDEO && current_adp_->type_ != AdaptiveTree::AUDIO) || SecondsSinceUpdate() < 1;
   }
   return false;
 }

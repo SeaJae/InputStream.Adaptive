@@ -173,7 +173,6 @@ namespace adaptive
       //SegmentList
       uint32_t duration_, timescale_;
       uint32_t timescale_ext_, timescale_int_;
-      std::chrono::time_point<std::chrono::system_clock> lastUpdated_;
       Segment initialization_;
       SPINCACHE<Segment> segments_;
       const Segment *current_segment_;
@@ -211,11 +210,6 @@ namespace adaptive
       uint32_t getCurrentSegmentNumber() const
       {
         return current_segment_ ? get_segment_pos(current_segment_) + startNumber_ : ~0U;
-      };
-
-      uint64_t GetCurrentPTSOffset() const
-      {
-        return current_segment_ ? (current_segment_->startPTS_ * timescale_ext_) / timescale_int_ : 0;
       };
 
       void SetScaling()
@@ -362,6 +356,7 @@ namespace adaptive
     std::mutex &GetTreeMutex() { return treeMutex_; };
     bool HasUpdateThread() const { return updateThread_ != 0 && has_timeshift_buffer_ && updateInterval_ && !update_parameter_.empty(); };
     void RefreshUpdateThread();
+    const std::chrono::time_point<std::chrono::system_clock> GetLastUpdated() const { return lastUpdated_; };
 protected:
   virtual bool download(const char* url, const std::map<std::string, std::string> &manifestHeaders);
   virtual bool write_data(void *buffer, size_t buffer_size) = 0;
@@ -376,6 +371,7 @@ protected:
   std::mutex treeMutex_, updateMutex_;
   std::condition_variable updateVar_;
   std::thread *updateThread_;
+  std::chrono::time_point<std::chrono::system_clock> lastUpdated_;
 private:
   void SegmentUpdateWorker();
 };

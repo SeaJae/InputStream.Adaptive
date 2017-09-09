@@ -276,8 +276,6 @@ bool HLSTree::prepareRepresentation(Representation *rep, bool update)
       }
     segments.clear();
 
-    rep->lastUpdated_ = std::chrono::system_clock::now();
-
     if (download(rep->source_url_.c_str(), manifest_headers_))
     {
 #if FILEDEBUG
@@ -522,8 +520,7 @@ RETRY:
 //Called each time before we switch to a new segment
 void HLSTree::RefreshSegments(Representation *rep, StreamType type)
 {
-  if (m_refreshPlayList && std::chrono::duration_cast<std::chrono::seconds>(
-    std::chrono::system_clock::now() - rep->lastUpdated_).count() > 0)
+  if (m_refreshPlayList)
   {
     RefreshUpdateThread();
     prepareRepresentation(rep, true);

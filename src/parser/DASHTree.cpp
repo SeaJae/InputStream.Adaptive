@@ -319,6 +319,26 @@ static time_t getTime(const char* timeStr)
   return ~0;
 }
 
+static void AddDuration(const char* dur, uint64_t& retVal, uint32_t scale)
+{
+  if (dur && *dur++ == 'P' && *dur++ == 'T')
+  {
+    const char *next = strchr(dur, 'H');
+    if (next) {
+      retVal += static_cast<uint64_t>(atof(dur) * 3600 * scale);
+      dur = next + 1;
+    }
+    next = strchr(dur, 'M');
+    if (next) {
+      retVal += static_cast<uint64_t>(atof(dur) * 60 * scale);
+      dur = next + 1;
+    }
+    next = strchr(dur, 'S');
+    if (next)
+      retVal += static_cast<uint64_t>(atof(dur) * scale);
+  }
+}
+
 bool ParseContentProtection(const char **attr, DASHTree *dash)
 {
   dash->strXMLText_.clear();
@@ -980,6 +1000,12 @@ start(void *data, const char *el, const char **attr)
       }
       else if (strcmp((const char*)*attr, "publishTime") == 0)
         dash->publish_time_ = getTime((const char*)*(attr + 1));
+      else if (strcmp((const char*)*attr, "minimumUpdatePeriod") == 0)
+      {
+        uint64_t dur(0);
+        AddDuration((const char*)*(attr + 1), dur, 1500);
+        dash->SetUpdateInterval(static_cast<uint32_t>(dur));
+      }
       attr += 2;
     }
 
@@ -991,22 +1017,8 @@ start(void *data, const char *el, const char **attr)
     else if (bStatic)
       dash->has_timeshift_buffer_ = false;
 
-    if (mpt && *mpt++ == 'P' && *mpt++ == 'T')
-    {
-      const char *next = strchr(mpt, 'H');
-      if (next){
-        dash->overallSeconds_ += static_cast<uint64_t>(atof(mpt)*3600);
-        mpt = next + 1;
-      }
-      next = strchr(mpt, 'M');
-      if (next){
-        dash->overallSeconds_ += static_cast<uint64_t>(atof(mpt)*60);
-        mpt = next + 1;
-      }
-      next = strchr(mpt, 'S');
-      if (next)
-        dash->overallSeconds_ += static_cast<uint64_t>(atof(mpt));
-    }
+    AddDuration(mpt, dash->overallSeconds_, 1);
+
     if (dash->publish_time_ && dash->available_time_ && dash->publish_time_ - dash->available_time_ > dash->overallSeconds_)
       dash->base_time_ = dash->publish_time_ - dash->available_time_ - dash->overallSeconds_;
     dash->minPresentationOffset = ~0ULL;
@@ -1385,10 +1397,11 @@ bool DASHTree::open(const std::string &url, const std::string &manifestUpdatePar
   XML_ParserFree(parser_);
   parser_ = 0;
 
-  SortTree();
-
-  updateStreamType_ = NOTYPE;
-
+  if (ret)
+  {
+    SortTree();
+    StartUpdateThread();
+  }
   return ret;
 }
 
@@ -1408,16 +1421,11 @@ bool DASHTree::write_data(void *buffer, size_t buffer_size)
 //Called each time before we switch to a new segment
 void DASHTree::RefreshSegments(Representation *rep, StreamType type)
 {
-  if ((type == VIDEO || type == AUDIO) && (updateStreamType_ == NOTYPE || updateStreamType_ == type))
+  if ((type == VIDEO || type == AUDIO))
   {
-    updateStreamType_ = type;
-    std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-    if (std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdated_).count())
-    {
-      lastUpdated_ = now;
-      RefreshUpdateThread();
-      RefreshSegments();
-    }
+    lastUpdated_ = std::chrono::system_clock::now();
+    RefreshUpdateThread();
+    RefreshSegments();
   }
 }
 
@@ -1444,6 +1452,7 @@ void DASHTree::RefreshSegments()
             if (replaceable < numReplace)
               numReplace = replaceable;
           }
+      Log(LOGLEVEL_DEBUG, "DASH Update: numReplace: %u", numReplace);
       replaced = update_parameter_;
       char buf[32];
       sprintf(buf, "%u", nextStartNumber);
@@ -1464,7 +1473,6 @@ void DASHTree::RefreshSegments()
     {
       etag_ = updateTree.etag_;
       last_modified_ = updateTree.last_modified_;
-      std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
 
       //Youtube returns last smallest number in case the requested data is not available
       if (~update_parameter_pos_ && updateTree.firstStartNumber_ < nextStartNumber)
@@ -1487,7 +1495,6 @@ void DASHTree::RefreshSegments()
               for (; brd != erd && (*brd)->id != (*br)->id; ++brd);
               if (brd != erd && !(*br)->segments_.empty())
               {
-                (*brd)->lastUpdated_ = now;
                 if (~update_parameter_pos_) // partitial update
                 {
                   //Here we go -> Insert new segments
@@ -1512,7 +1519,10 @@ void DASHTree::RefreshSegments()
                     (*brd)->current_segment_ = nullptr;
 
                   if (((*brd)->flags_ & Representation::WAITFORSEGMENT) && (*brd)->get_next_segment((*brd)->current_segment_))
+                  {
                     (*brd)->flags_ &= ~Representation::WAITFORSEGMENT;
+                    Log(LOGLEVEL_DEBUG, "End WaitForSegment stream %s", (*brd)->id.c_str());
+                  }
 
                   if (bs == es)
                     (*brd)->nextPts_ += (*br)->nextPts_;

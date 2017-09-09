@@ -31,12 +31,10 @@ namespace adaptive
     virtual bool write_data(void *buffer, size_t buffer_size) override;
     virtual void RefreshSegments(Representation *rep, StreamType type) override;
 
+    void SetUpdateInterval(uint32_t interval) { updateInterval_ = interval; };
     uint64_t pts_helper_;
     uint32_t firstStartNumber_;
   protected:
     virtual void RefreshSegments() override;
-  private:
-    StreamType updateStreamType_;
-    std::chrono::time_point<std::chrono::system_clock> lastUpdated_;
   };
 }

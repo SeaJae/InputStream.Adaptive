@@ -57,6 +57,7 @@ namespace adaptive
     , need_secure_decoder_(false)
     , updateInterval_(~0)
     , updateThread_(nullptr)
+    , lastUpdated_(std::chrono::system_clock::now())
   {
     psshSets_.push_back(PSSH());
   }
@@ -300,6 +301,7 @@ namespace adaptive
       if (updateVar_.wait_for(updLck, std::chrono::milliseconds(updateInterval_)) == std::cv_status::timeout)
       {
         std::lock_guard<std::mutex> lck(treeMutex_);
+        lastUpdated_ = std::chrono::system_clock::now();
         RefreshSegments();
       }
     }

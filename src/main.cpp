@@ -758,6 +758,35 @@ public:
   virtual bool RemoveStreamType(INPUTSTREAM_INFO::STREAM_TYPE type) { return true; };
 };
 
+/*******************************************************
+|   DummySampleReader
+********************************************************/
+
+class DummyReader: public SampleReader
+{
+public:
+  virtual ~DummyReader() = default;
+  virtual bool EOS()const override { return false; }
+  virtual uint64_t  DTS()const override { return DVD_NOPTS_VALUE; }
+  virtual uint64_t  PTS()const override { return DVD_NOPTS_VALUE; }
+  virtual uint64_t  Elapsed(uint64_t basePTS) override { return 0; }
+  virtual AP4_Result Start(bool &bStarted) override { return AP4_SUCCESS; }
+  virtual AP4_Result ReadSample() override { return AP4_SUCCESS; }
+  virtual void Reset(bool bEOS) override {}
+  virtual bool GetInformation(INPUTSTREAM_INFO &info) override { return false; }
+  virtual bool TimeSeek(uint64_t pts, bool preceeding) override { return false; }
+  virtual void SetPTSOffset(uint64_t offset) override {}
+  virtual bool GetNextFragmentInfo(uint64_t &ts, uint64_t &dur) override { return false; }
+  virtual uint32_t GetTimeScale() const override { return 1; }
+  virtual AP4_UI32 GetStreamId() const override { return 0; }
+  virtual AP4_Size GetSampleDataSize() const override { return 0; }
+  virtual const AP4_Byte *GetSampleData() const override { return nullptr; }
+  virtual uint64_t GetDuration() const override { return 0; }
+  virtual bool IsEncrypted() const override { return false; }
+  virtual void AddStreamType(INPUTSTREAM_INFO::STREAM_TYPE type, uint16_t sid) override {};
+  virtual void SetStreamType(INPUTSTREAM_INFO::STREAM_TYPE type, uint16_t sid) override {};
+  virtual bool RemoveStreamType(INPUTSTREAM_INFO::STREAM_TYPE type) override { return true; };
+}DummyReader;
 
 /*******************************************************
 |   FragmentedSampleReader
@@ -858,7 +887,12 @@ public:
       if (AP4_FAILED(result = ReadNextSample(m_track->GetId(), m_sample, (m_decrypter || useDecryptingDecoder) ? m_encrypted : m_sampleData)))
       {
         if (result == AP4_ERROR_EOS)
-          m_eos = true;
+        {
+          if (dynamic_cast<AP4_DASHStream*>(m_FragmentStream)->waitingForSegment())
+            m_sampleData.SetDataSize(0);
+          else
+            m_eos = true;
+        }
         return result;
       }
 
@@ -1970,13 +2004,13 @@ SampleReader *Session::GetNextSample()
     if (res->reader_->GetInformation(res->info_))
       changed_ = true;
     if (res->reader_->PTS() != DVD_NOPTS_VALUE)
-      elapsed_time_ = res->reader_->Elapsed(res->stream_.GetStartPTS());
+      elapsed_time_ = res->reader_->Elapsed(res->stream_.GetPTSOffset());
     return res->reader_;
   }
   else if (waiting)
   {
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    return waiting->reader_;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    return &DummyReader;
   }
   return 0;
 }
@@ -1999,7 +2033,7 @@ bool Session::SeekTime(double seekTime, unsigned int streamId, bool preceeding)
     if ((*b)->enabled && (*b)->reader_ && (streamId == 0 || (*b)->info_.m_pID == streamId))
     {
       bool bReset;
-      uint64_t seekTimeCorrected = static_cast<uint64_t>(seekTime * DVD_TIME_BASE) + (*b)->stream_.GetStartPTS();
+      uint64_t seekTimeCorrected = static_cast<uint64_t>(seekTime * DVD_TIME_BASE) + (*b)->stream_.GetPTSOffset();
       if ((*b)->stream_.seek_time(static_cast<double>(seekTimeCorrected) / DVD_TIME_BASE, preceeding, bReset))
       {
         if (bReset)
@@ -2008,7 +2042,7 @@ bool Session::SeekTime(double seekTime, unsigned int streamId, bool preceeding)
           (*b)->reader_->Reset(true);
         else
         {
-          double destTime(static_cast<double>((*b)->reader_->Elapsed((*b)->stream_.GetStartPTS())) / DVD_TIME_BASE);
+          double destTime(static_cast<double>((*b)->reader_->Elapsed((*b)->stream_.GetPTSOffset())) / DVD_TIME_BASE);
           kodi::Log(ADDON_LOG_INFO, "seekTime(%0.1lf) for Stream:%d continues at %0.1lf", seekTime, (*b)->info_.m_pID, destTime);
           if ((*b)->info_.m_streamType == INPUTSTREAM_INFO::TYPE_VIDEO)
             seekTime = destTime, preceeding = false;
@@ -2549,13 +2583,16 @@ DemuxPacket* CInputStreamAdaptive::DemuxRead(void)
     else
       p = AllocateDemuxPacket(iSize);
 
-    p->dts = static_cast<double>(sr->DTS());
-    p->pts = static_cast<double>(sr->PTS());
-    p->duration = static_cast<double>(sr->GetDuration());
-    p->iStreamId = sr->GetStreamId();
-    p->iGroupId = 0;
-    p->iSize = iSize;
-    memcpy(p->pData, pData, iSize);
+    if (iSize)
+    {
+      p->dts = static_cast<double>(sr->DTS());
+      p->pts = static_cast<double>(sr->PTS());
+      p->duration = static_cast<double>(sr->GetDuration());
+      p->iStreamId = sr->GetStreamId();
+      p->iGroupId = 0;
+      p->iSize = iSize;
+      memcpy(p->pData, pData, iSize);
+    }
 
     //kodi::Log(ADDON_LOG_DEBUG, "DTS: %0.4f, PTS:%0.4f, ID: %u SZ: %d", p->dts, p->pts, p->iStreamId, p->iSize);
 
