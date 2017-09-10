@@ -2004,7 +2004,7 @@ SampleReader *Session::GetNextSample()
     if (res->reader_->GetInformation(res->info_))
       changed_ = true;
     if (res->reader_->PTS() != DVD_NOPTS_VALUE)
-      elapsed_time_ = res->reader_->Elapsed(res->stream_.GetPTSOffset());
+      elapsed_time_ = res->reader_->Elapsed(res->stream_.GetAbsolutePTSOffset());
     return res->reader_;
   }
   else if (waiting)
@@ -2033,7 +2033,7 @@ bool Session::SeekTime(double seekTime, unsigned int streamId, bool preceeding)
     if ((*b)->enabled && (*b)->reader_ && (streamId == 0 || (*b)->info_.m_pID == streamId))
     {
       bool bReset;
-      uint64_t seekTimeCorrected = static_cast<uint64_t>(seekTime * DVD_TIME_BASE) + (*b)->stream_.GetPTSOffset();
+      uint64_t seekTimeCorrected = static_cast<uint64_t>(seekTime * DVD_TIME_BASE) + (*b)->stream_.GetAbsolutePTSOffset();
       if ((*b)->stream_.seek_time(static_cast<double>(seekTimeCorrected) / DVD_TIME_BASE, preceeding, bReset))
       {
         if (bReset)
@@ -2042,7 +2042,7 @@ bool Session::SeekTime(double seekTime, unsigned int streamId, bool preceeding)
           (*b)->reader_->Reset(true);
         else
         {
-          double destTime(static_cast<double>((*b)->reader_->Elapsed((*b)->stream_.GetPTSOffset())) / DVD_TIME_BASE);
+          double destTime(static_cast<double>((*b)->reader_->Elapsed((*b)->stream_.GetAbsolutePTSOffset())) / DVD_TIME_BASE);
           kodi::Log(ADDON_LOG_INFO, "seekTime(%0.1lf) for Stream:%d continues at %0.1lf", seekTime, (*b)->info_.m_pID, destTime);
           if ((*b)->info_.m_streamType == INPUTSTREAM_INFO::TYPE_VIDEO)
             seekTime = destTime, preceeding = false;
@@ -2061,7 +2061,7 @@ void Session::OnSegmentChanged(adaptive::AdaptiveStream *stream)
     if (&(*s)->stream_ == stream)
     {
       if((*s)->reader_)
-        (*s)->reader_->SetPTSOffset((*s)->stream_.GetPTSOffset());
+        (*s)->reader_->SetPTSOffset((*s)->stream_.GetCurrentPTSOffset());
       (*s)->segmentChanged = true;
       break;
     }
@@ -2644,7 +2644,8 @@ int CInputStreamAdaptive::GetTime()
   if (!m_session)
     return 0;
 
-  return static_cast<int>(m_session->GetElapsedTimeMs());
+  int timeMs = static_cast<int>(m_session->GetElapsedTimeMs());
+  return timeMs;
 }
 
 bool CInputStreamAdaptive::CanPauseStream(void)

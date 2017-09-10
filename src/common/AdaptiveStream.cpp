@@ -35,7 +35,8 @@ AdaptiveStream::AdaptiveStream(AdaptiveTree &tree, AdaptiveTree::StreamType type
   , current_rep_(nullptr)
   , thread_data_(nullptr)
   , segment_read_pos_(0)
-  , start_PTS_(0)
+  , currentPTSOffset_(0)
+  , absolutePTSOffset_(0)
   , lastUpdated_(std::chrono::system_clock::now())
 {
 }
@@ -216,7 +217,8 @@ bool AdaptiveStream::PrepareDownload(const AdaptiveTree::Segment *seg)
   if (!seg)
     return false;
 
-  start_PTS_ = (seg->startPTS_ * current_rep_->timescale_ext_) / current_rep_->timescale_int_;
+  currentPTSOffset_ = (seg->startPTS_ * current_rep_->timescale_ext_) / current_rep_->timescale_int_;
+  absolutePTSOffset_ = (current_rep_->segments_[0]->startPTS_ * current_rep_->timescale_ext_) / current_rep_->timescale_int_;
 
   if (observer_ && seg != &current_rep_->initialization_)
     observer_->OnSegmentChanged(this);
@@ -393,6 +395,8 @@ bool AdaptiveStream::seek_time(double seek_seconds, bool preceeding, bool &needR
 
   if (current_rep_->flags_ & AdaptiveTree::Representation::SUBTITLESTREAM)
     return true;
+
+  std::lock_guard<std::mutex> lckTree(tree_.GetTreeMutex());
 
   uint32_t choosen_seg(~0);
 

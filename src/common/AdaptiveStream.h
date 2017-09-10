@@ -69,7 +69,8 @@ namespace adaptive
     double get_download_speed() const { return tree_.get_download_speed(); };
     void set_download_speed(double speed) { tree_.set_download_speed(speed); };
     size_t getSegmentPos() { return current_rep_->getCurrentSegmentPos(); };
-    uint64_t GetPTSOffset() { return start_PTS_; };
+    uint64_t GetCurrentPTSOffset() { return currentPTSOffset_; };
+    uint64_t GetAbsolutePTSOffset() { return absolutePTSOffset_; };
     bool waitingForSegment(bool checkTime = false) const;
   protected:
     virtual bool download(const char* url, const std::map<std::string, std::string> &mediaHeaders){ return false; };
@@ -122,7 +123,7 @@ namespace adaptive
     std::map<std::string, std::string> media_headers_, download_headers_;
     std::size_t segment_read_pos_;
     uint64_t absolute_position_;
-    uint64_t start_PTS_;
+    uint64_t currentPTSOffset_, absolutePTSOffset_;
     std::chrono::time_point<std::chrono::system_clock> lastUpdated_;
 
     uint16_t width_, height_;
